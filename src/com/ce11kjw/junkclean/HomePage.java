@@ -17,22 +17,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** 首页：存储条 + 扫描 + 分类卡 + 清理 + 前后对比 + 目录排行 */
-public class HomePage {
+public class HomePage extends PageBase {
 
-    private final MainActivity act;
     private ScrollView scroll;
-    private LinearLayout catBox, rankBox;
+    private LinearLayout catBox;
     private StorageBarView bar;
     private TextView diskText, rootBadge, statBadge, scanState, compareText;
     private Button scanBtn, cleanBtn, allBtn, aiBtn;
     private TextView rescanBtn, aiText;
     private List<JunkCategory> cats = new ArrayList<JunkCategory>();
-    private final Handler ui = new Handler(Looper.getMainLooper());
     private boolean scanning;
     private long freeBefore;
 
-    public HomePage(MainActivity a) { this.act = a; }
+    public HomePage(MainActivity a) { super(a); }
 
+    @Override
     public View view() {
         if (scroll != null) return scroll;
 
@@ -64,11 +63,11 @@ public class HomePage {
 
         // 扫描按钮
         scanBtn = UI.primary(act, "🔍  开始扫描");
-        scanBtn.setTextSize(16);
+        scanBtn.setTextSize(14.5f);
         scanBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { startScan(false); }
         });
-        root.addView(scanBtn, UI.lpm(act, UI.MP, Theme.dp(act, 52), 14));
+        root.addView(scanBtn, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H_MAIN), 14));
 
         // 强制重扫
         rescanBtn = UI.text(act, "60 秒内复用上次结果 · 点此强制重扫", 11, Theme.DIM);
@@ -110,7 +109,7 @@ public class HomePage {
         aiApply.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { applyAiAdvice(); }
         });
-        aiOps.addView(aiApply, UI.weight(1f, 38, act));
+        aiOps.addView(aiApply, UI.weight(1f, UI.BTN_H, act));
         aiCard.addView(aiOps, UI.lpm(act, UI.MP, UI.WC, 8));
         aiBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { askAi(); }
@@ -118,7 +117,6 @@ public class HomePage {
         root.addView(aiCard, UI.lpm(act, UI.MP, UI.WC, 12));
 
         // 底部操作
-        LinearLayout btns = UI.row(act);
         cleanBtn = UI.danger(act, "清理 (0 B)");
         cleanBtn.setEnabled(false);
         cleanBtn.setAlpha(0.5f);
@@ -129,29 +127,8 @@ public class HomePage {
         allBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { cleanAllSafe(); }
         });
-        btns.addView(cleanBtn, UI.weight(1f, 46, act));
-        LinearLayout.LayoutParams ap = UI.weight(1f, 46, act);
-        ap.leftMargin = Theme.dp(act, 8);
-        btns.addView(allBtn, ap);
-        root.addView(btns, UI.lpm(act, UI.MP, UI.WC, 14));
+        root.addView(UI.btnRow(act, UI.BTN_H_MAIN, cleanBtn, allBtn), UI.lpm(act, UI.MP, UI.WC, 14));
 
-        // 目录体积排行
-        LinearLayout rankCard = UI.card(act);
-        LinearLayout rankHead = UI.row(act);
-        rankHead.addView(UI.title(act, "📊  目录体积排行"));
-        Button rankBtn = UI.secondary(act, "统计");
-        rankBtn.setTextSize(11.5f);
-        LinearLayout.LayoutParams rbp = UI.lp(Theme.dp(act, 64), Theme.dp(act, 30));
-        rbp.leftMargin = Theme.dp(act, 8);
-        rankHead.addView(rankBtn, rbp);
-        rankCard.addView(rankHead);
-        rankCard.addView(UI.note(act, "sdcard 一级目录占用，找出空间大户"));
-        rankBox = UI.col(act);
-        rankCard.addView(rankBox, UI.lpm(act, UI.MP, UI.WC, 8));
-        rankBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { loadRank(); }
-        });
-        root.addView(rankCard, UI.lpm(act, UI.MP, UI.WC, 12));
         root.addView(UI.spacer(act, 24));
 
         scroll = new ScrollView(act);
@@ -496,38 +473,4 @@ public class HomePage {
         act.toast("已按建议勾选 " + n + " 项（谨慎分类仍需手动确认）");
     }
 
-    // ---------- 目录排行 ----------
-
-    private void loadRank() {
-        rankBox.removeAllViews();
-        rankBox.addView(UI.note(act, "统计中…"));
-        new Thread(new Runnable() {
-            public void run() {
-                final List<JunkItem> list = Finder.dirRank(Util.sdRoot(), 10);
-                ui.post(new Runnable() {
-                    public void run() {
-                        rankBox.removeAllViews();
-                        if (list.isEmpty()) { rankBox.addView(UI.empty(act, "无数据")); return; }
-                        long max = list.get(0).size;
-                        for (JunkItem it : list) {
-                            LinearLayout r = UI.row(act);
-                            r.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
-                            TextView nm = UI.text(act, it.name, 12, Theme.MUTED);
-                            nm.setSingleLine(true);
-                            nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                            r.addView(nm, new LinearLayout.LayoutParams(Theme.dp(act, 96), UI.WC));
-                            StorageBarView b = new StorageBarView(act);
-                            b.setPercent(max > 0 ? it.size * 100f / max : 0);
-                            LinearLayout.LayoutParams bp2 =
-                                    new LinearLayout.LayoutParams(0, Theme.dp(act, 8), 1f);
-                            bp2.leftMargin = bp2.rightMargin = Theme.dp(act, 8);
-                            r.addView(b, bp2);
-                            r.addView(UI.text(act, Util.fmtSize(it.size), 11, Theme.DIM));
-                            rankBox.addView(r);
-                        }
-                    }
-                });
-            }
-        }).start();
-    }
 }

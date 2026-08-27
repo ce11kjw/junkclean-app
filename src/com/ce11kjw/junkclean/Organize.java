@@ -7,9 +7,12 @@ import java.util.List;
 /** 整理中心：按扩展名分类归档 + 干跑预览 + 历史还原 */
 public class Organize {
 
-    /** 一条整理规则 */
+    /**
+     * 一条整理规则。源目录是全局统一的（存在 Store.orgSrc），
+     * 规则只描述"目标目录 + 两个开关"，避免每条规则各自一个源导致混乱。
+     */
     public static class Rule {
-        public String src;
+        public String src;                 // 运行时由调用方注入全局源目录
         public String dst;
         public boolean recursive = true;
         public boolean integrity = true;   // 跳过未完成下载
@@ -19,16 +22,18 @@ public class Organize {
             this.recursive = recursive; this.integrity = integrity;
         }
 
+        /** 持久化格式只存目标与开关 */
         public String serialize() {
-            return src + "|" + dst + "|" + (recursive ? 1 : 0) + "|" + (integrity ? 1 : 0);
+            return dst + "|" + (recursive ? 1 : 0) + "|" + (integrity ? 1 : 0);
         }
 
-        public static Rule parse(String line) {
+        /** src 由外部统一传入 */
+        public static Rule parse(String line, String globalSrc) {
             String[] p = line.split("\\|");
-            if (p.length < 2) return null;
-            return new Rule(p[0], p[1],
-                    p.length < 3 || "1".equals(p[2]),
-                    p.length < 4 || "1".equals(p[3]));
+            if (p.length < 1 || p[0].trim().isEmpty()) return null;
+            return new Rule(globalSrc, p[0],
+                    p.length < 2 || "1".equals(p[1]),
+                    p.length < 3 || "1".equals(p[2]));
         }
     }
 

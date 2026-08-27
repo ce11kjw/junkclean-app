@@ -18,12 +18,15 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "2.1.0";
+    public static final String VERSION = "2.2.0";
 
     private FrameLayout content;
-    private final Button[] tabs = new Button[3];
+    private static final int TAB_N = 5;
+    private final Button[] tabs = new Button[TAB_N];
     private HomePage home;
     private ToolsPage tools;
+    private FilesPage files;
+    private StatsPage stats;
     private SettingsPage settings;
     Store store;
     private int current = -1;
@@ -75,6 +78,8 @@ public class MainActivity extends Activity {
 
         home = new HomePage(this);
         tools = new ToolsPage(this);
+        files = new FilesPage(this);
+        stats = new StatsPage(this);
         settings = new SettingsPage(this);
         current = -1;
         switchTab(0);
@@ -85,7 +90,7 @@ public class MainActivity extends Activity {
         Wallpaper.invalidate();
         Theme.glass = Wallpaper.exists(this);
         build();
-        switchTab(2);
+        switchTab(4);
     }
 
     /** 主题变更后重建界面 */
@@ -94,32 +99,31 @@ public class MainActivity extends Activity {
         Theme.glass = Wallpaper.exists(this);
         Wallpaper.invalidate();
         build();
-        switchTab(2);
+        switchTab(4);
         toast("外观已更新");
     }
 
     private LinearLayout buildTabBar() {
         LinearLayout bar = UI.row(this);
-        bar.setBackgroundColor(Wallpaper.exists(this)
-                ? Theme.alpha(Theme.BG2, 0xC8) : Theme.BG2);
+        bar.setBackground(Theme.navBar(this));
         int pv = Theme.dp(this, 6);
         bar.setPadding(Theme.dp(this, 10), pv, Theme.dp(this, 10), pv);
 
-        String[] labels = {"🏠  首页", "🧰  工具箱", "⚙  设置"};
-        for (int i = 0; i < 3; i++) {
+        String[] labels = {"🏠", "🧰", "📂", "📊", "⚙"};
+        for (int i = 0; i < TAB_N; i++) {
             final int idx = i;
             Button t = new Button(this);
             t.setText(labels[i]);
-            t.setTextSize(12.5f);
+            t.setTextSize(15f);
             t.setAllCaps(false);
             t.setStateListAnimator(null);
-            t.setMinHeight(Theme.dp(this, 40));
-            t.setMinimumHeight(Theme.dp(this, 40));
+            t.setMinHeight(Theme.dp(this, 38));
+            t.setMinimumHeight(Theme.dp(this, 38));
             t.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) { switchTab(idx); }
             });
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, UI.WC, 1f);
-            p.leftMargin = p.rightMargin = Theme.dp(this, 3);
+            p.leftMargin = p.rightMargin = Theme.dp(this, 2);
             bar.addView(t, p);
             tabs[i] = t;
         }
@@ -129,12 +133,18 @@ public class MainActivity extends Activity {
     void switchTab(int idx) {
         if (current == idx) return;
         current = idx;
-        for (int i = 0; i < 3; i++) UI.setChipActive(this, tabs[i], i == idx);
+        for (int i = 0; i < TAB_N; i++) UI.setChipActive(this, tabs[i], i == idx);
         content.removeAllViews();
-        View v = idx == 0 ? home.view() : idx == 1 ? tools.view() : settings.view();
+        View v;
+        switch (idx) {
+            case 1:  v = tools.view();    break;
+            case 2:  v = files.view();    break;
+            case 3:  v = stats.view();    stats.refresh();    break;
+            case 4:  v = settings.view(); settings.refresh(); break;
+            default: v = home.view();
+                     home.refreshDisk(); home.refreshStat(); break;
+        }
         content.addView(v, new FrameLayout.LayoutParams(UI.MP, UI.MP));
-        if (idx == 2) settings.refresh();
-        if (idx == 0) { home.refreshDisk(); home.refreshStat(); }
         v.scrollTo(0, 0);
     }
 
@@ -153,6 +163,43 @@ public class MainActivity extends Activity {
                     "android.permission.READ_EXTERNAL_STORAGE",
                     "android.permission.WRITE_EXTERNAL_STORAGE"}, 1);
         }
+    }
+
+    /** 是否已获得应用列表权限（QUERY_ALL_PACKAGES 在部分 ROM 需运行时确认） */
+    boolean hasPackagePermission() {
+        try {
+            return getPackageManager().getInstalledApplications(0).size() > 12;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        }
+        return checkSelfPermission("android.permission.READ_EXTERNAL_STORAGE")
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** 引导用户处理应用列表权限：可读则提示已可用，否则跳应用详情页 */
+    void requestPackagePermission() {
+        if (hasPackagePermission()) {
+            toast("应用列表已可读取（共 " + safeAppCount() + " 个）");
+            return;
+        }
+        toast("请在应用信息中允许读取应用列表");
+        try {
+            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            i.setData(Uri.parse("package:" + getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception ignored) {}
+    }
+
+    private int safeAppCount() {
+        try { return getPackageManager().getInstalledApplications(0).size(); }
+        catch (Exception e) { return 0; }
     }
 
     void toast(String s) {

@@ -24,14 +24,14 @@ public class ScanEngine {
 
     private final Context ctx;
     private final Store store;
-    private final Set<String> whitelist = new HashSet<String>();
+    private final List<String> whitelist;
     private final boolean root;
 
     public ScanEngine(Context ctx, Store store) {
         this.ctx = ctx;
         this.store = store;
         this.root = Shell.hasRoot();
-        whitelist.addAll(store.whitelist());
+        this.whitelist = store.whitelist();
     }
 
     public static void invalidate() { cache = null; }
@@ -81,6 +81,11 @@ public class ScanEngine {
         return cats;
     }
 
+    /** 统一白名单判定 */
+    private boolean wl(String nameOrPath) {
+        return Finder.inWhitelist(whitelist, nameOrPath);
+    }
+
     private String scanRoot() {
         String r = store.scanRoot();
         return r == null || r.trim().isEmpty() ? Util.sdRoot() : r.trim();
@@ -101,7 +106,7 @@ public class ScanEngine {
                     if (kb <= 4) continue;
                     String path = l.substring(bar + 1);
                     String pkg = pkgFromPath(path);
-                    if (whitelist.contains(pkg)) continue;
+                    if (wl(pkg)) continue;
                     c.items.add(new JunkItem(path, pkg + " / " + new File(path).getName(), kb * 1024));
                 } catch (NumberFormatException ignored) {}
             }
@@ -113,7 +118,7 @@ public class ScanEngine {
         File[] pkgs = new File(Util.sdRoot() + "/Android/data").listFiles();
         if (pkgs != null) {
             for (File p : pkgs) {
-                if (whitelist.contains(p.getName())) continue;
+                if (wl(p.getName())) continue;
                 File cache = new File(p, "cache");
                 long sz = Util.dirSize(cache);
                 if (sz > 65536) c.items.add(new JunkItem(cache.getAbsolutePath(),
@@ -134,7 +139,7 @@ public class ScanEngine {
             d = d.trim();
             if (d.isEmpty()) continue;
             String pkg = pkgFromPath(d);
-            if (whitelist.contains(pkg)) continue;
+            if (wl(pkg)) continue;
             long s = root ? Shell.du(d) : Util.dirSize(new File(d));
             if (s > 65536) c.items.add(new JunkItem(d, pkg + " / webview", s));
         }
@@ -154,21 +159,21 @@ public class ScanEngine {
     }
 
     private void scanThumbs(JunkCategory c) {
-        c.items.addAll(Finder.thumbs());
+        c.items.addAll(Finder.thumbs(whitelist));
     }
 
     /** 冗余安装包：sdcard 上的 apk 且对应包已安装 */
     private void scanApkJunk(JunkCategory c) {
-        for (Finder.ApkInfo a : Finder.apks(ctx, scanRoot())) {
+        for (Finder.ApkInfo a : Finder.apks(ctx, scanRoot(), whitelist)) {
             if (!a.installed) continue;
-            if (whitelist.contains(a.label)) continue;
+            if (wl(a.label) || wl(a.path)) continue;
             JunkItem it = new JunkItem(a.path, a.label + "（已安装）", a.size);
             c.items.add(it);
         }
     }
 
     private void scanEmpty(JunkCategory c) {
-        c.items.addAll(Finder.empties(scanRoot(), true, 150));
+        c.items.addAll(Finder.empties(scanRoot(), true, 150, whitelist));
     }
 
     private void scanResidue(JunkCategory c) {
@@ -185,7 +190,7 @@ public class ScanEngine {
             if (dirs == null) continue;
             for (File d : dirs) {
                 String pkg = d.getName();
-                if (installed.contains(pkg) || whitelist.contains(pkg)) continue;
+                if (installed.contains(pkg) || wl(pkg)) continue;
                 if (!pkg.contains(".")) continue;
                 long s = Util.dirSize(d);
                 if (s > 0) c.items.add(new JunkItem(d.getAbsolutePath(),
@@ -205,7 +210,7 @@ public class ScanEngine {
             String n = f.getName();
             if (n.equals("Android") || n.startsWith(".")) continue;
             if (f.isDirectory()) { walkExt(f, depth + 1, maxDepth, c, exts); continue; }
-            if (whitelist.contains(n)) continue;
+            if (wl(n) || wl(f.getAbsolutePath())) continue;
             String low = n.toLowerCase(Locale.US);
             for (String e : exts) {
                 if (low.endsWith(e) && f.length() > 0) {

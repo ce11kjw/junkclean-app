@@ -68,9 +68,22 @@ public class Store {
         sp.edit().putBoolean("cat_" + id, on).apply();
     }
 
-    // ---------- 整理规则（src|dst|recursive|integrity 每行一条） ----------
+    // ---------- 整理中心：全局统一源目录 ----------
+    public String orgSrc() {
+        return sp.getString("orgSrc", Util.sdRoot() + "/Download");
+    }
+    public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
+
+    // ---------- 远程更新 ----------
+    public String updateUrl() {
+        return sp.getString("updateUrl",
+                "https://api.github.com/repos/ce11kjw/junkclean-app/releases/latest");
+    }
+    public void setUpdateUrl(String v) { sp.edit().putString("updateUrl", v).apply(); }
+
+    // ---------- 整理规则（dst|recursive|integrity 每行一条，源统一取 orgSrc） ----------
     public List<String> rules() {
-        String def = Util.sdRoot() + "/Download|" + Util.sdRoot() + "/JunkClean整理|1|1";
+        String def = Util.sdRoot() + "/JunkClean整理|1|1";
         return split(sp.getString("rules", def));
     }
 

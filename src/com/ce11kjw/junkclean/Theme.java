@@ -2,10 +2,12 @@ package com.ce11kjw.junkclean;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.util.TypedValue;
 
-/** 深空玻璃配色（可切换 dark/oled/light + 4 强调色） */
+/** 深空玻璃：3 主题 × 4 强调色；壁纸开启时卡片转为真半透明玻璃 */
 public final class Theme {
 
     public static int BG       = 0xFF050509;
@@ -22,11 +24,13 @@ public final class Theme {
     public static int ACCENT2  = 0xFF7C5CFF;
     public static int WARN     = 0xFFFBBF24;
     public static int DANGER   = 0xFFFB7185;
+
     public static boolean light = false;
+    /** 壁纸启用时为 true：卡片走半透明玻璃，让背景透出来 */
+    public static boolean glass = false;
 
     private Theme() {}
 
-    /** 应用主题 + 强调色（必须在构建视图前调用） */
     public static void apply(String theme, String accent) {
         if ("oled".equals(theme)) {
             BG = 0xFF000000; BG2 = 0xFF000000;
@@ -69,15 +73,48 @@ public final class Theme {
                 c.getResources().getDisplayMetrics());
     }
 
-    /** 是否使用半透明卡片（有壁纸时开启，营造玻璃质感） */
-    public static boolean glass = false;
+    /**
+     * 玻璃卡片：无壁纸时用实色 SURFACE；有壁纸时用低透明度 + 顶部高光渐变，
+     * 让下层模糊壁纸透出来形成拟态玻璃。
+     */
+    public static Drawable card(Context c, float radiusDp) {
+        float r = dp(c, radiusDp);
+        if (!glass) {
+            GradientDrawable g = new GradientDrawable();
+            g.setCornerRadius(r);
+            g.setColor(SURFACE);
+            g.setStroke(dp(c, 1), LINE);
+            return g;
+        }
 
-    public static GradientDrawable card(Context c, float radiusDp) {
+        // 底层：半透明填充
+        GradientDrawable base = new GradientDrawable();
+        base.setCornerRadius(r);
+        base.setColor(light ? alpha(0xFFFFFF, 0x8A) : alpha(0x14141F, 0x8A));
+        base.setStroke(dp(c, 1), light ? alpha(0xFFFFFF, 0xB0) : alpha(0xFFFFFF, 0x24));
+
+        // 上层：从顶部白色高光到透明，模拟玻璃反光
+        GradientDrawable gloss = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{light ? alpha(0xFFFFFF, 0x60) : alpha(0xFFFFFF, 0x1C),
+                          alpha(0xFFFFFF, 0x00)});
+        gloss.setCornerRadius(r);
+
+        return new LayerDrawable(new Drawable[]{base, gloss});
+    }
+
+    /** 内层小容器（列表项、规则块） */
+    public static Drawable inner(Context c, float radiusDp) {
+        float r = dp(c, radiusDp);
         GradientDrawable g = new GradientDrawable();
-        g.setShape(GradientDrawable.RECTANGLE);
-        g.setCornerRadius(dp(c, radiusDp));
-        g.setColor(glass ? alpha(SURFACE, 0xD2) : SURFACE);
-        g.setStroke(dp(c, 1), glass ? alpha(LINE2, 0xB4) : LINE);
+        g.setCornerRadius(r);
+        if (glass) {
+            g.setColor(light ? alpha(0xFFFFFF, 0x66) : alpha(0xFFFFFF, 0x0E));
+            g.setStroke(dp(c, 1), light ? alpha(0x000000, 0x14) : alpha(0xFFFFFF, 0x18));
+        } else {
+            g.setColor(SURFACE2);
+            g.setStroke(dp(c, 1), LINE);
+        }
         return g;
     }
 
@@ -98,8 +135,13 @@ public final class Theme {
     public static GradientDrawable secondaryBtn(Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(c, 99));
-        g.setColor(SURFACE2);
-        g.setStroke(dp(c, 1), LINE2);
+        if (glass) {
+            g.setColor(light ? alpha(0xFFFFFF, 0x7A) : alpha(0xFFFFFF, 0x14));
+            g.setStroke(dp(c, 1), light ? alpha(0x000000, 0x1A) : alpha(0xFFFFFF, 0x2E));
+        } else {
+            g.setColor(SURFACE2);
+            g.setStroke(dp(c, 1), LINE2);
+        }
         return g;
     }
 
@@ -107,6 +149,17 @@ public final class Theme {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(c, 99));
         g.setColor(fill);
+        return g;
+    }
+
+    /** 底部导航容器 */
+    public static Drawable navBar(Context c) {
+        GradientDrawable g = new GradientDrawable();
+        if (glass) {
+            g.setColor(light ? alpha(0xFFFFFF, 0xC4) : alpha(0x08080F, 0xC4));
+        } else {
+            g.setColor(BG2);
+        }
         return g;
     }
 }

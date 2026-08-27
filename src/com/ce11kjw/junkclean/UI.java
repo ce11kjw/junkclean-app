@@ -35,7 +35,7 @@ public final class UI {
     public static LinearLayout card(Context c) {
         LinearLayout l = col(c);
         l.setBackground(Theme.card(c, 18));
-        int p = Theme.dp(c, 16);
+        int p = Theme.dp(c, 15);
         l.setPadding(p, p, p, p);
         return l;
     }
@@ -79,7 +79,7 @@ public final class UI {
         Button b = new Button(c);
         b.setText(s);
         b.setTextColor(0xFFFFFFFF);
-        b.setTextSize(14);
+        b.setTextSize(12.5f);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setAllCaps(false);
         b.setBackground(Theme.primaryBtn(c));
@@ -104,11 +104,11 @@ public final class UI {
     public static Button chip(Context c, String s, boolean active) {
         Button b = new Button(c);
         b.setText(s);
-        b.setTextSize(11.5f);
+        b.setTextSize(11f);
         b.setAllCaps(false);
-        b.setPadding(Theme.dp(c, 12), 0, Theme.dp(c, 12), 0);
+        b.setPadding(Theme.dp(c, 10), 0, Theme.dp(c, 10), 0);
         b.setMinWidth(0); b.setMinimumWidth(0);
-        b.setMinHeight(Theme.dp(c, 30)); b.setMinimumHeight(Theme.dp(c, 30));
+        b.setMinHeight(Theme.dp(c, 26)); b.setMinimumHeight(Theme.dp(c, 26));
         b.setStateListAnimator(null);
         setChipActive(c, b, active);
         return b;
@@ -159,6 +159,17 @@ public final class UI {
         return r;
     }
 
+    /** 小号 Switch（整理规则等紧凑场景） */
+    public static android.widget.Switch smallSwitch(Context c, boolean on) {
+        android.widget.Switch sw = new android.widget.Switch(c);
+        sw.setChecked(on);
+        sw.setScaleX(0.85f);
+        sw.setScaleY(0.85f);
+        sw.setThumbTintList(android.content.res.ColorStateList.valueOf(Theme.ACCENT));
+        sw.setTrackTintList(android.content.res.ColorStateList.valueOf(Theme.LINE2));
+        return sw;
+    }
+
     public static EditText input(Context c, String hint, String value) {
         EditText e = new EditText(c);
         e.setHint(hint);
@@ -166,7 +177,7 @@ public final class UI {
         e.setTextSize(12.5f);
         e.setTextColor(Theme.TEXT);
         e.setHintTextColor(Theme.DIM);
-        e.setBackground(Theme.card(c, 12));
+        e.setBackground(Theme.inner(c, 12));
         int p = Theme.dp(c, 10);
         e.setPadding(p + Theme.dp(c, 2), p, p, p);
         e.setSingleLine(true);
@@ -180,6 +191,14 @@ public final class UI {
         e.setMinLines(minLines);
         e.setGravity(Gravity.TOP | Gravity.START);
         return e;
+    }
+
+    /** 分区标题：小号大写 + 强调色 */
+    public static TextView section(Context c, String s) {
+        TextView t = text(c, s, 11, Theme.ACCENT);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setPadding(Theme.dp(c, 4), Theme.dp(c, 10), 0, Theme.dp(c, 4));
+        return t;
     }
 
     public static View spacer(Context c, int dp) {
@@ -209,6 +228,21 @@ public final class UI {
 
     public static LinearLayout.LayoutParams weight(float w, int hDp, Context c) {
         return new LinearLayout.LayoutParams(0, Theme.dp(c, hDp), w);
+    }
+
+    /** 标准按钮高度（紧凑） */
+    public static final int BTN_H = 36;
+    public static final int BTN_H_MAIN = 44;
+
+    /** 等宽按钮行，自动加间距 */
+    public static LinearLayout btnRow(Context c, int heightDp, Button... bs) {
+        LinearLayout r = row(c);
+        for (int i = 0; i < bs.length; i++) {
+            LinearLayout.LayoutParams p = weight(1f, heightDp, c);
+            if (i > 0) p.leftMargin = Theme.dp(c, 6);
+            r.addView(bs[i], p);
+        }
+        return r;
     }
 
     /** 确认对话框 */

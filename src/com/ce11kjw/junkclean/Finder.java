@@ -31,6 +31,17 @@ public final class Finder {
         TYPE_EXT.put("apk", new String[]{".apk",".apks",".xapk",".apkm"});
     }
 
+    /** 白名单匹配：文件名完全相等，或路径包含该条目 */
+    public static boolean inWhitelist(List<String> wl, String nameOrPath) {
+        if (wl == null || wl.isEmpty() || nameOrPath == null) return false;
+        for (String w : wl) {
+            if (w.isEmpty()) continue;
+            if (nameOrPath.equals(w)) return true;
+            if (nameOrPath.contains("/" + w + "/") || nameOrPath.endsWith("/" + w)) return true;
+        }
+        return false;
+    }
+
     public static boolean matchType(String name, String type) {
         if (type == null || "all".equals(type)) return true;
         String[] exts = TYPE_EXT.get(type);
@@ -67,7 +78,7 @@ public final class Finder {
                 walk(f, depth + 1, maxDepth, out, cap, minBytes, before, wl);
                 continue;
             }
-            if (wl != null && wl.contains(n)) continue;
+            if (inWhitelist(wl, n) || inWhitelist(wl, f.getAbsolutePath())) continue;
             if (f.length() >= minBytes && f.lastModified() <= before) {
                 JunkItem it = new JunkItem(f.getAbsolutePath(), n, f.length());
                 it.checked = false;
@@ -80,12 +91,13 @@ public final class Finder {
     // ---------- 目录体积排行 ----------
 
     /** 一级子目录体积排行（找出谁占空间） */
-    public static List<JunkItem> dirRank(String root, int top) {
+    public static List<JunkItem> dirRank(String root, int top, List<String> wl) {
         List<JunkItem> out = new ArrayList<JunkItem>();
         File[] fs = new File(root).listFiles();
         if (fs == null) return out;
         for (File f : fs) {
             if (!f.isDirectory() || f.getName().startsWith(".")) continue;
+            if (inWhitelist(wl, f.getName())) continue;
             long s = Util.dirSize(f);
             if (s > 0) {
                 JunkItem it = new JunkItem(f.getAbsolutePath(), f.getName(), s);
@@ -101,20 +113,21 @@ public final class Finder {
 
     // ---------- 空文件 / 空目录 ----------
 
-    public static List<JunkItem> empties(String root, boolean includeDirs, int cap) {
+    public static List<JunkItem> empties(String root, boolean includeDirs, int cap,
+                                         List<String> wl) {
         List<JunkItem> out = new ArrayList<JunkItem>();
-        walkEmpty(new File(root), 0, out, includeDirs, cap);
+        walkEmpty(new File(root), 0, out, includeDirs, cap, wl);
         return out;
     }
 
     private static void walkEmpty(File dir, int depth, List<JunkItem> out,
-                                  boolean includeDirs, int cap) {
+                                  boolean includeDirs, int cap, List<String> wl) {
         if (depth > 9 || out.size() >= cap) return;
         if (dir.getName().equals(".junkclean_trash")) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {
-            if (f.getName().startsWith(".")) continue;
+            if (f.getName().startsWith(".") || inWhitelist(wl, f.getName())) continue;
             if (f.isDirectory()) {
                 File[] sub = f.listFiles();
                 if (includeDirs && sub != null && sub.length == 0) {
@@ -122,7 +135,7 @@ public final class Finder {
                     it.checked = false;
                     out.add(it);
                 } else {
-                    walkEmpty(f, depth + 1, out, includeDirs, cap);
+                    walkEmpty(f, depth + 1, out, includeDirs, cap, wl);
                 }
             } else if (f.length() == 0) {
                 JunkItem it = new JunkItem(f.getAbsolutePath(), f.getName(), 0);
@@ -141,9 +154,10 @@ public final class Finder {
     }
 
     /** 先按 大小 分桶，再对同桶算 quickHash 精确分组 */
-    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups) {
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl) {
         Map<Long, List<File>> bySize = new HashMap<Long, List<File>>();
-        collectBySize(new File(root), 0, bySize, minSize);
+        collectBySize(new File(root), 0, bySize, minSize, wl);
 
         List<DupGroup> groups = new ArrayList<DupGroup>();
         for (Map.Entry<Long, List<File>> e : bySize.entrySet()) {
@@ -183,22 +197,23 @@ public final class Finder {
         return g;
     }
 
-    private static void collectBySize(File dir, int depth, Map<Long, List<File>> map, long minSize) {
+    private static void collectBySize(File dir, int depth, Map<Long, List<File>> map,
+                                      long minSize, List<String> wl) {
         if (depth > 8 || map.size() > 8000) return;
         if (dir.getName().equals(".junkclean_trash")) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {
             if (f.getName().startsWith(".")) continue;
-            if (f.isDirectory()) { collectBySize(f, depth + 1, map, minSize); continue; }
-            if (f.length() < minSize) continue;
+            if (f.isDirectory()) { collectBySize(f, depth + 1, map, minSize, wl); continue; }
+            if (f.length() < minSize || inWhitelist(wl, f.getName())) continue;
             List<File> l = map.get(f.length());
             if (l == null) { l = new ArrayList<File>(); map.put(f.length(), l); }
             l.add(f);
         }
     }
 
-    /** 保留策略：newest / oldest / shortest（其余标记为待删） */
+    /** 保留策略：newest / oldest / shortest / largest（其余标记为待删） */
     public static void applyKeepPolicy(List<DupGroup> groups, String policy) {
         for (DupGroup g : groups) {
             int keep = 0;
@@ -207,7 +222,10 @@ public final class Finder {
                 boolean better;
                 if ("oldest".equals(policy)) better = b.mtime < a.mtime;
                 else if ("shortest".equals(policy)) better = b.path.length() < a.path.length();
-                else better = b.mtime > a.mtime;      // newest
+                else if ("largest".equals(policy)) {
+                    // 同组文件大小相同时退化为比较修改时间，保证策略稳定
+                    better = b.size > a.size || (b.size == a.size && b.mtime > a.mtime);
+                } else better = b.mtime > a.mtime;      // newest
                 if (better) keep = i;
             }
             for (int i = 0; i < g.files.size(); i++) g.files.get(i).checked = (i != keep);
@@ -216,7 +234,7 @@ public final class Finder {
 
     // ---------- 缩略图 ----------
 
-    public static List<JunkItem> thumbs() {
+    public static List<JunkItem> thumbs(List<String> wl) {
         String sd = Util.sdRoot();
         String[] dirs = {
                 sd + "/DCIM/.thumbnails", sd + "/Pictures/.thumbnails", sd + "/.thumbnails",
@@ -229,11 +247,9 @@ public final class Finder {
         for (String d : dirs) {
             File f = new File(d);
             if (!f.isDirectory()) continue;
+            if (inWhitelist(wl, f.getName()) || inWhitelist(wl, d)) continue;
             long s = Util.dirSize(f);
-            if (s > 0) {
-                JunkItem it = new JunkItem(d, Util.shortPath(d), s);
-                out.add(it);
-            }
+            if (s > 0) out.add(new JunkItem(d, Util.shortPath(d), s));
         }
         return out;
     }
@@ -248,7 +264,7 @@ public final class Finder {
     }
 
     /** 扫描 sdcard 上的 apk，判断是否已安装（已安装的可安全删） */
-    public static List<ApkInfo> apks(Context ctx, String root) {
+    public static List<ApkInfo> apks(Context ctx, String root, List<String> wl) {
         Set<String> installed = new HashSet<String>();
         PackageManager pm = ctx.getPackageManager();
         try {
@@ -260,6 +276,7 @@ public final class Finder {
 
         List<ApkInfo> out = new ArrayList<ApkInfo>();
         for (JunkItem f : files) {
+            if (inWhitelist(wl, f.name)) continue;
             ApkInfo a = new ApkInfo();
             a.path = f.path;
             a.label = f.name;
@@ -318,7 +335,7 @@ public final class Finder {
 
         for (ApplicationInfo a : apps) {
             if ((a.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
-            if (wl != null && wl.contains(a.packageName)) continue;
+            if (inWhitelist(wl, a.packageName)) continue;
             long sz = 0;
             if (root) {
                 sz += Shell.du("/data/data/" + a.packageName + "/cache");
