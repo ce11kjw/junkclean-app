@@ -89,31 +89,23 @@ public class HomePage extends PageBase {
         catBox = UI.col(act);
         root.addView(catBox, UI.lpm(act, UI.MP, UI.WC, 8));
 
-        // AI 建议
+        // AI 建议：标题独占一行，两个按钮在底部同一水平线
         LinearLayout aiCard = UI.card(act);
-        LinearLayout aiHead = UI.row(act);
-        aiHead.addView(UI.title(act, "🤖  AI 清理建议"));
-        aiBtn = UI.secondary(act, "分析");
-        aiBtn.setTextSize(11.5f);
-        LinearLayout.LayoutParams abp = UI.lp(Theme.dp(act, 64), Theme.dp(act, 30));
-        abp.leftMargin = Theme.dp(act, 8);
-        aiHead.addView(aiBtn, abp);
-        aiCard.addView(aiHead);
+        aiCard.addView(UI.title(act, "🤖  AI 清理建议"));
         aiCard.addView(UI.note(act, "把扫描结果交给 AI 分析，给出该清哪些、留哪些的建议"));
         aiText = UI.text(act, "", 12, Theme.MUTED);
         aiText.setLineSpacing(0, 1.45f);
         aiCard.addView(aiText, UI.lpm(act, UI.MP, UI.WC, 8));
-        LinearLayout aiOps = UI.row(act);
-        Button aiApply = UI.secondary(act, "采纳建议（按分类勾选）");
-        aiApply.setTextSize(11.5f);
-        aiApply.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { applyAiAdvice(); }
-        });
-        aiOps.addView(aiApply, UI.weight(1f, UI.BTN_H, act));
-        aiCard.addView(aiOps, UI.lpm(act, UI.MP, UI.WC, 8));
+
+        aiBtn = UI.primary(act, "分析扫描结果");
+        Button aiApply = UI.secondary(act, "采纳建议");
         aiBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { askAi(); }
         });
+        aiApply.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { applyAiAdvice(); }
+        });
+        aiCard.addView(UI.btnRow(act, UI.BTN_H, aiBtn, aiApply), UI.lpm(act, UI.MP, UI.WC, 10));
         root.addView(aiCard, UI.lpm(act, UI.MP, UI.WC, 12));
 
         // 底部操作

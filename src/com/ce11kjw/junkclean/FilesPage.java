@@ -178,7 +178,7 @@ public class FilesPage extends PageBase {
         bigSum.setText("扫描中…");
         new Thread(new Runnable() {
             public void run() {
-                final List<JunkItem> found = Finder.big(scanRoot(), min, bigDays, wl(), 300);
+                final List<JunkItem> found = Finder.big(scanRoot(), min, bigDays, wl(), 300, act.store.fullScan());
                 ui.post(new Runnable() {
                     public void run() {
                         bigItems.clear();
@@ -248,18 +248,16 @@ public class FilesPage extends PageBase {
         scan.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { scanDup(); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, policy, scan), UI.lpm(act, UI.MP, UI.WC, 6));
-
         dupSum = UI.note(act, "");
         c.addView(dupSum, UI.lpm(act, UI.MP, UI.WC, 8));
         dupList = UI.col(act);
         c.addView(dupList, UI.lpm(act, UI.MP, UI.WC, 4));
 
-        Button del = UI.danger(act, "删除勾选的副本");
+        Button del = UI.danger(act, "删除副本");
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { delDup(); }
         });
-        c.addView(del, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, policy, scan, del), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
     }
 
@@ -286,7 +284,7 @@ public class FilesPage extends PageBase {
         dupSum.setText("扫描中（计算哈希，稍慢）…");
         new Thread(new Runnable() {
             public void run() {
-                final List<Finder.DupGroup> gs = Finder.duplicates(scanRoot(), 65536, 40, wl());
+                final List<Finder.DupGroup> gs = Finder.duplicates(scanRoot(), 65536, 40, wl(), act.store.fullScan());
                 Finder.applyKeepPolicy(gs, keepPolicy);
                 ui.post(new Runnable() {
                     public void run() { dupGroups = gs; renderDup(); }
@@ -384,17 +382,15 @@ public class FilesPage extends PageBase {
             public void onCheckedChanged(android.widget.CompoundButton v, boolean on) { emptyDirs = on; }
         }));
 
-        Button scan = UI.primary(act, "扫描");
-        scan.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { scanEmpty(); }
-        });
-        c.addView(scan, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 8));
-
         emptySum = UI.note(act, "");
         c.addView(emptySum, UI.lpm(act, UI.MP, UI.WC, 8));
         emptyList = UI.col(act);
         c.addView(emptyList, UI.lpm(act, UI.MP, UI.WC, 4));
 
+        Button scan = UI.primary(act, "扫描");
+        scan.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { scanEmpty(); }
+        });
         Button selAll = UI.secondary(act, "全选");
         Button del = UI.danger(act, "清理选中");
         selAll.setOnClickListener(new View.OnClickListener() {
@@ -403,7 +399,7 @@ public class FilesPage extends PageBase {
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { removeItems(emptyItems, emptyList, emptySum, false); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, selAll, del), UI.lpm(act, UI.MP, UI.WC, 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, scan, selAll, del), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
     }
 
@@ -412,7 +408,7 @@ public class FilesPage extends PageBase {
         emptySum.setText("扫描中…");
         new Thread(new Runnable() {
             public void run() {
-                final List<JunkItem> found = Finder.empties(scanRoot(), emptyDirs, 250, wl());
+                final List<JunkItem> found = Finder.empties(scanRoot(), emptyDirs, 250, wl(), act.store.fullScan());
                 ui.post(new Runnable() {
                     public void run() {
                         emptyItems.clear();
@@ -447,18 +443,16 @@ public class FilesPage extends PageBase {
                 renderApk();
             }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, scan, selIns), UI.lpm(act, UI.MP, UI.WC, 8));
-
         apkSum = UI.note(act, "");
         c.addView(apkSum, UI.lpm(act, UI.MP, UI.WC, 8));
         apkList = UI.col(act);
         c.addView(apkList, UI.lpm(act, UI.MP, UI.WC, 4));
 
-        Button del = UI.danger(act, "删除选中安装包");
+        Button del = UI.danger(act, "删除选中");
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { delApk(); }
         });
-        c.addView(del, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, scan, selIns, del), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
     }
 
@@ -467,7 +461,7 @@ public class FilesPage extends PageBase {
         apkSum.setText("扫描中…");
         new Thread(new Runnable() {
             public void run() {
-                final List<Finder.ApkInfo> found = Finder.apks(act, scanRoot(), wl());
+                final List<Finder.ApkInfo> found = Finder.apks(act, scanRoot(), wl(), act.store.fullScan());
                 ui.post(new Runnable() {
                     public void run() { apkItems = found; renderApk(); }
                 });

@@ -53,6 +53,7 @@ public class ScanEngine {
                 {"apkjunk",  "冗余安装包", "已安装应用对应的 apk 文件", "📥", "1", "0"},
                 {"emptyjunk","空文件",     "0 字节文件与空目录", "🫙", "0", "0"},
                 {"residue",  "应用残留",   "已卸载应用留下的数据目录", "🧹", "1", "0"},
+                {"syscache",  "系统缓存",  "dalvik / 字体 / 包管理器缓存（全盘模式）", "⚙", "1", "1"},
         };
 
         int total = defs.length;
@@ -72,6 +73,7 @@ public class ScanEngine {
             else if ("apkjunk".equals(c.id))   scanApkJunk(c);
             else if ("emptyjunk".equals(c.id)) scanEmpty(c);
             else if ("residue".equals(c.id))   scanResidue(c);
+            else if ("syscache".equals(c.id))  scanSysCache(c);
 
             cats.add(c);
         }
@@ -146,8 +148,15 @@ public class ScanEngine {
     }
 
     private void scanLogs(JunkCategory c) {
-        for (String p : new String[]{"/data/tombstones", "/data/anr", "/data/log",
-                "/data/system/dropbox", "/cache/recovery", "/data/local/tmp"}) {
+        List<String> paths = new ArrayList<String>(java.util.Arrays.asList(
+                "/data/tombstones", "/data/anr", "/data/log",
+                "/data/system/dropbox", "/cache/recovery", "/data/local/tmp"));
+        if (store.fullScan()) {
+            paths.addAll(java.util.Arrays.asList(
+                    "/data/misc/logd", "/data/system/usagestats", "/data/vendor/tombstones",
+                    "/data/misc/bootstat", "/cache/lost+found", "/data/dalvik-cache/profiles"));
+        }
+        for (String p : paths) {
             long s = Shell.du(p);
             if (s > 4096) c.items.add(new JunkItem(p, p, s));
         }
@@ -155,7 +164,9 @@ public class ScanEngine {
 
     private void scanTemp(JunkCategory c) {
         String[] exts = {".tmp", ".temp", ".part", ".crdownload", ".download", ".log", ".bak", ".old"};
-        walkExt(new File(scanRoot()), 0, 7, c, exts);
+        for (String r : Finder.roots(scanRoot(), store.fullScan())) {
+            walkExt(new File(r), 0, 7, c, exts);
+        }
     }
 
     private void scanThumbs(JunkCategory c) {
@@ -164,7 +175,7 @@ public class ScanEngine {
 
     /** 冗余安装包：sdcard 上的 apk 且对应包已安装 */
     private void scanApkJunk(JunkCategory c) {
-        for (Finder.ApkInfo a : Finder.apks(ctx, scanRoot(), whitelist)) {
+        for (Finder.ApkInfo a : Finder.apks(ctx, scanRoot(), whitelist, store.fullScan())) {
             if (!a.installed) continue;
             if (wl(a.label) || wl(a.path)) continue;
             JunkItem it = new JunkItem(a.path, a.label + "（已安装）", a.size);
@@ -173,7 +184,7 @@ public class ScanEngine {
     }
 
     private void scanEmpty(JunkCategory c) {
-        c.items.addAll(Finder.empties(scanRoot(), true, 150, whitelist));
+        c.items.addAll(Finder.empties(scanRoot(), true, 150, whitelist, store.fullScan()));
     }
 
     private void scanResidue(JunkCategory c) {
@@ -196,6 +207,22 @@ public class ScanEngine {
                 if (s > 0) c.items.add(new JunkItem(d.getAbsolutePath(),
                         pkg + "（已卸载）", s));
             }
+        }
+    }
+
+    /** 系统级缓存，仅全盘模式启用 */
+    private void scanSysCache(JunkCategory c) {
+        if (!store.fullScan() || !root) return;
+        String[] paths = {
+                "/data/dalvik-cache/arm64", "/data/dalvik-cache/arm",
+                "/data/system/package_cache", "/data/misc/installd",
+                "/data/resource-cache", "/data/system/appops",
+                "/data/misc/gatekeeper", "/data/font/files"
+        };
+        for (String p : paths) {
+            if (wl(p)) continue;
+            long s = Shell.du(p);
+            if (s > 65536) c.items.add(new JunkItem(p, p, s));
         }
     }
 

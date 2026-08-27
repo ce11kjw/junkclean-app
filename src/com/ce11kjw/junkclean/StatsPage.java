@@ -47,13 +47,13 @@ public class StatsPage extends PageBase {
         root.addView(UI.section(act, "目录体积排行"));
         LinearLayout rk = UI.card(act);
         rk.addView(UI.note(act, "扫描根目录下一级目录占用，找出空间大户"));
+        rankBox = UI.col(act);
+        rk.addView(rankBox, UI.lpm(act, UI.MP, UI.WC, 8));
         Button rankBtn = UI.primary(act, "开始统计");
         rankBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { loadRank(); }
         });
-        rk.addView(rankBtn, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
-        rankBox = UI.col(act);
-        rk.addView(rankBox, UI.lpm(act, UI.MP, UI.WC, 8));
+        rk.addView(UI.btnRow(act, UI.BTN_H, rankBtn), UI.lpm(act, UI.MP, UI.WC, 10));
         root.addView(rk);
 
         root.addView(UI.section(act, "数据管理"));
@@ -126,7 +126,7 @@ public class StatsPage extends PageBase {
         rankBox.addView(UI.note(act, "统计中…"));
         new Thread(new Runnable() {
             public void run() {
-                final List<JunkItem> list = Finder.dirRank(scanRoot(), 12, wl());
+                final List<JunkItem> list = Finder.dirRank(scanRoot(), 12, wl(), act.store.fullScan());
                 ui.post(new Runnable() {
                     public void run() {
                         rankBox.removeAllViews();

@@ -61,6 +61,10 @@ public class Store {
     public void setTrashDays(int d) { sp.edit().putInt("trashDays", d).apply(); }
 
     public String scanRoot() { return sp.getString("scanRoot", ""); }
+
+    /** 全盘扫描（需 root）：扫描 /data /system /cache 等系统分区 */
+    public boolean fullScan() { return sp.getBoolean("fullScan", false); }
+    public void setFullScan(boolean b) { sp.edit().putBoolean("fullScan", b).apply(); }
     public void setScanRoot(String s) { sp.edit().putString("scanRoot", s).apply(); }
 
     public boolean catEnabled(String id) { return sp.getBoolean("cat_" + id, true); }
@@ -83,7 +87,14 @@ public class Store {
 
     // ---------- 整理规则（dst|recursive|integrity 每行一条，源统一取 orgSrc） ----------
     public List<String> rules() {
-        String def = Util.sdRoot() + "/JunkClean整理|1|1";
+        String sd = Util.sdRoot();
+        String def = sd + "/JunkClean整理|1|1\n"
+                + sd + "/Pictures/整理相册|1|1\n"
+                + sd + "/Movies/整理视频|1|1\n"
+                + sd + "/Music/整理音频|1|1\n"
+                + sd + "/Documents/整理文档|1|1\n"
+                + sd + "/Download/整理压缩包|0|1\n"
+                + sd + "/Download/整理安装包|0|1";
         return split(sp.getString("rules", def));
     }
 
@@ -92,16 +103,27 @@ public class Store {
     }
 
     public String extMap() {
-        return sp.getString("extMap",
-                ".jpg,.jpeg,.png,.gif,.webp,.heic=图片\n"
-              + ".mp4,.mkv,.mov,.avi,.webm=视频\n"
-              + ".mp3,.flac,.wav,.m4a,.ogg=音频\n"
-              + ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt=文档\n"
-              + ".zip,.7z,.rar,.tar,.gz=压缩包\n"
-              + ".apk,.apks,.xapk=安装包");
+        return sp.getString("extMap", DEFAULT_EXT_MAP);
     }
 
+    /** 默认分类映射，覆盖常见文件类型 */
+    public static final String DEFAULT_EXT_MAP =
+            ".jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.bmp,.avif,.tiff,.tif,.jfif=图片\n"
+          + ".mp4,.mkv,.mov,.avi,.webm,.3gp,.m4v,.flv,.wmv,.mpeg,.mpg,.ts,.rmvb=视频\n"
+          + ".mp3,.flac,.wav,.m4a,.ogg,.aac,.ape,.wma,.opus,.amr,.mid=音频\n"
+          + ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.rtf,.odt,.csv,.md=文档\n"
+          + ".epub,.mobi,.azw3,.fb2,.djvu=电子书\n"
+          + ".zip,.7z,.rar,.tar,.gz,.xz,.bz2,.zst,.tgz,.iso=压缩包\n"
+          + ".apk,.apks,.xapk,.apkm,.aab=安装包\n"
+          + ".psd,.ai,.sketch,.fig,.xd,.svg,.eps=设计文件\n"
+          + ".java,.kt,.py,.js,.ts,.c,.cpp,.h,.go,.rs,.php,.rb,.sh,.json,.xml,.yaml,.yml=代码\n"
+          + ".ttf,.otf,.woff,.woff2=字体\n"
+          + ".torrent,.magnet=种子\n"
+          + ".log,.bak,.old,.dmp=日志备份";
+
     public void setExtMap(String s) { sp.edit().putString("extMap", s).apply(); }
+    public void resetExtMap() { sp.edit().remove("extMap").apply(); }
+    public void resetRules() { sp.edit().remove("rules").apply(); }
 
     // ---------- 统计 ----------
     public long totalFreed() { return sp.getLong("totalFreed", 0); }

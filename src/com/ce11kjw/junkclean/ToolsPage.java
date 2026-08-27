@@ -98,7 +98,7 @@ public class ToolsPage extends PageBase {
         clean.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { cleanApps(); }
         });
-        c.addView(clean, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, clean), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
     }
 
@@ -204,22 +204,20 @@ public class ToolsPage extends PageBase {
         LinearLayout c = UI.card(act);
         c.addView(UI.note(act, "相册与图库的预览缓存，删除后浏览时会自动重建"));
 
-        Button scan = UI.primary(act, "扫描");
-        scan.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { scanThumb(); }
-        });
-        c.addView(scan, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 8));
-
         thumbSum = UI.note(act, "");
         c.addView(thumbSum, UI.lpm(act, UI.MP, UI.WC, 8));
         thumbList = UI.col(act);
         c.addView(thumbList, UI.lpm(act, UI.MP, UI.WC, 4));
 
+        Button scan = UI.primary(act, "扫描");
         Button del = UI.danger(act, "清理选中");
+        scan.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { scanThumb(); }
+        });
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { removeItems(thumbItems, thumbList, thumbSum, false); }
         });
-        c.addView(del, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, scan, del), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
     }
 
@@ -254,17 +252,22 @@ public class ToolsPage extends PageBase {
 
         c.addView(UI.h2(act, "统一源目录"), UI.lpm(act, UI.MP, UI.WC, 10));
         orgSrcInput = UI.input(act, Util.sdRoot() + "/Download", act.store.orgSrc());
-        c.addView(orgSrcInput, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 4));
-        Button saveSrc = UI.secondary(act, "保存源目录");
+        Button saveSrc = UI.secondary(act, "保存");
         saveSrc.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 String p = orgSrcInput.getText().toString().trim();
                 if (p.isEmpty()) { act.toast("源目录不能为空"); return; }
                 act.store.setOrgSrc(p);
+                renderRules();
                 act.toast("源目录已保存");
             }
         });
-        c.addView(saveSrc, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 6));
+        LinearLayout srcRow = UI.row(act);
+        srcRow.addView(orgSrcInput, UI.weight(1f, UI.BTN_H, act));
+        LinearLayout.LayoutParams sbp = UI.lp(Theme.dp(act, 58), Theme.dp(act, UI.BTN_H));
+        sbp.leftMargin = Theme.dp(act, 6);
+        srcRow.addView(saveSrc, sbp);
+        c.addView(srcRow, UI.lpm(act, UI.MP, UI.WC, 4));
 
         c.addView(UI.h2(act, "整理规则"), UI.lpm(act, UI.MP, UI.WC, 12));
         ruleBox = UI.col(act);
@@ -368,7 +371,8 @@ public class ToolsPage extends PageBase {
             del.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) { deleteRule(idx); }
             });
-            box.addView(UI.btnRow(act, 32, save, prev, run, del), UI.lpm(act, UI.MP, UI.WC, 8));
+            box.addView(UI.btnRow(act, 32, save, prev), UI.lpm(act, UI.MP, UI.WC, 8));
+        box.addView(UI.btnRow(act, 32, run, del), UI.lpm(act, UI.MP, UI.WC, 6));
 
             ruleBox.addView(box, UI.lpm(act, UI.MP, UI.WC, i == 0 ? 0 : 8));
         }
@@ -539,7 +543,7 @@ public class ToolsPage extends PageBase {
         empty.setOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) { emptyTrash(); return true; }
         });
-        c.addView(empty, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, empty), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
     }
 

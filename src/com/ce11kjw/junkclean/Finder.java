@@ -51,13 +51,40 @@ public final class Finder {
         return false;
     }
 
+    /** 全盘扫描时的系统分区（需 root） */
+    public static final String[] SYSTEM_ROOTS = {
+            "/data/data", "/data/local/tmp", "/data/media/0", "/data/app",
+            "/cache", "/data/log", "/data/tombstones", "/data/anr",
+            "/data/system/dropbox", "/data/vendor", "/data/misc"
+    };
+
+    /** 返回本次要遍历的根目录：普通模式只有 sdcard，全盘模式追加系统分区 */
+    public static List<String> roots(String sdRoot, boolean full) {
+        List<String> out = new ArrayList<String>();
+        out.add(sdRoot);
+        if (full && Shell.hasRoot()) {
+            for (String p : SYSTEM_ROOTS) {
+                if (p.startsWith(sdRoot)) continue;
+                if (new File(p).isDirectory()) out.add(p);
+            }
+        }
+        return out;
+    }
+
     // ---------- 大文件 ----------
 
     /** minBytes 阈值，days>0 时只要 N 天前的旧文件 */
     public static List<JunkItem> big(String root, long minBytes, int days, List<String> wl, int cap) {
+        return big(root, minBytes, days, wl, cap, false);
+    }
+
+    public static List<JunkItem> big(String root, long minBytes, int days, List<String> wl,
+                                     int cap, boolean full) {
         List<JunkItem> out = new ArrayList<JunkItem>();
         long before = days > 0 ? System.currentTimeMillis() - days * 86400000L : Long.MAX_VALUE;
-        walk(new File(root), 0, 9, out, cap, minBytes, before, wl);
+        for (String r : roots(root, full)) {
+            walk(new File(r), 0, 9, out, cap, minBytes, before, wl);
+        }
         Collections.sort(out, new Comparator<JunkItem>() {
             public int compare(JunkItem a, JunkItem b) { return Long.compare(b.size, a.size); }
         });
@@ -92,9 +119,25 @@ public final class Finder {
 
     /** 一级子目录体积排行（找出谁占空间） */
     public static List<JunkItem> dirRank(String root, int top, List<String> wl) {
+        return dirRank(root, top, wl, false);
+    }
+
+    public static List<JunkItem> dirRank(String root, int top, List<String> wl, boolean full) {
         List<JunkItem> out = new ArrayList<JunkItem>();
+        if (full && Shell.hasRoot()) {
+            for (String p : SYSTEM_ROOTS) {
+                File d = new File(p);
+                if (!d.isDirectory()) continue;
+                long s = Shell.du(p);
+                if (s > 0) {
+                    JunkItem it = new JunkItem(p, p, s);
+                    it.checked = false;
+                    out.add(it);
+                }
+            }
+        }
         File[] fs = new File(root).listFiles();
-        if (fs == null) return out;
+        if (fs == null) return sortBySize(out, top);
         for (File f : fs) {
             if (!f.isDirectory() || f.getName().startsWith(".")) continue;
             if (inWhitelist(wl, f.getName())) continue;
@@ -105,6 +148,10 @@ public final class Finder {
                 out.add(it);
             }
         }
+        return sortBySize(out, top);
+    }
+
+    private static List<JunkItem> sortBySize(List<JunkItem> out, int top) {
         Collections.sort(out, new Comparator<JunkItem>() {
             public int compare(JunkItem a, JunkItem b) { return Long.compare(b.size, a.size); }
         });
@@ -115,8 +162,15 @@ public final class Finder {
 
     public static List<JunkItem> empties(String root, boolean includeDirs, int cap,
                                          List<String> wl) {
+        return empties(root, includeDirs, cap, wl, false);
+    }
+
+    public static List<JunkItem> empties(String root, boolean includeDirs, int cap,
+                                         List<String> wl, boolean full) {
         List<JunkItem> out = new ArrayList<JunkItem>();
-        walkEmpty(new File(root), 0, out, includeDirs, cap, wl);
+        for (String r : roots(root, full)) {
+            walkEmpty(new File(r), 0, out, includeDirs, cap, wl);
+        }
         return out;
     }
 
@@ -156,8 +210,15 @@ public final class Finder {
     /** 先按 大小 分桶，再对同桶算 quickHash 精确分组 */
     public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
                                             List<String> wl) {
+        return duplicates(root, minSize, maxGroups, wl, false);
+    }
+
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl, boolean full) {
         Map<Long, List<File>> bySize = new HashMap<Long, List<File>>();
-        collectBySize(new File(root), 0, bySize, minSize, wl);
+        for (String r : roots(root, full)) {
+            collectBySize(new File(r), 0, bySize, minSize, wl);
+        }
 
         List<DupGroup> groups = new ArrayList<DupGroup>();
         for (Map.Entry<Long, List<File>> e : bySize.entrySet()) {
@@ -265,6 +326,10 @@ public final class Finder {
 
     /** 扫描 sdcard 上的 apk，判断是否已安装（已安装的可安全删） */
     public static List<ApkInfo> apks(Context ctx, String root, List<String> wl) {
+        return apks(ctx, root, wl, false);
+    }
+
+    public static List<ApkInfo> apks(Context ctx, String root, List<String> wl, boolean full) {
         Set<String> installed = new HashSet<String>();
         PackageManager pm = ctx.getPackageManager();
         try {
@@ -272,7 +337,7 @@ public final class Finder {
         } catch (Exception ignored) {}
 
         List<JunkItem> files = new ArrayList<JunkItem>();
-        walkApk(new File(root), 0, files);
+        for (String r : roots(root, full)) walkApk(new File(r), 0, files);
 
         List<ApkInfo> out = new ArrayList<ApkInfo>();
         for (JunkItem f : files) {

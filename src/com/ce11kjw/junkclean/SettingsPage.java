@@ -280,6 +280,22 @@ public class SettingsPage extends PageBase {
         dRow.addView(dBtn, UI.lp(Theme.dp(act, 56), Theme.dp(act, 30)));
         c.addView(dRow, UI.lpm(act, UI.MP, UI.WC, 6));
 
+        c.addView(UI.switchRow(act, "全盘扫描（需 root）",
+                "额外扫描 /data /cache 等系统分区，耗时更长",
+                act.store.fullScan(),
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                if (on && !Shell.hasRoot()) {
+                    v.setChecked(false);
+                    act.toast("全盘扫描需要 root 权限");
+                    return;
+                }
+                act.store.setFullScan(on);
+                ScanEngine.invalidate();
+                act.toast(on ? "已开启全盘扫描" : "已关闭全盘扫描");
+            }
+        }));
+
         c.addView(UI.note(act, "自定义扫描根目录（留空用 sdcard 根）"), UI.lpm(act, UI.MP, UI.WC, 10));
         rootInput = UI.input(act, Util.sdRoot(), act.store.scanRoot());
         c.addView(rootInput, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 4));
@@ -310,6 +326,32 @@ public class SettingsPage extends PageBase {
         });
         c.addView(UI.btnRow(act, UI.BTN_H, saveRoot, clearCache, autoTrash),
                 UI.lpm(act, UI.MP, UI.WC, 8));
+
+        Button resetRules = UI.secondary(act, "恢复默认整理规则");
+        Button resetMap = UI.secondary(act, "恢复默认分类映射");
+        resetRules.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                UI.confirm(act, "恢复默认规则", "将覆盖现有整理规则，恢复为内置的 7 条默认规则。",
+                        new Runnable() {
+                    public void run() {
+                        act.store.resetRules();
+                        act.toast("已恢复默认整理规则");
+                    }
+                });
+            }
+        });
+        resetMap.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                UI.confirm(act, "恢复默认映射", "将覆盖现有分类映射，恢复为内置的 12 类默认映射。",
+                        new Runnable() {
+                    public void run() {
+                        act.store.resetExtMap();
+                        act.toast("已恢复默认分类映射");
+                    }
+                });
+            }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, resetRules, resetMap), UI.lpm(act, UI.MP, UI.WC, 6));
         return c;
     }
 
@@ -325,7 +367,8 @@ public class SettingsPage extends PageBase {
         String[][] cats = {
                 {"cache", "应用缓存"}, {"webview", "WebView 缓存"}, {"log", "日志文件"},
                 {"temp", "临时文件"}, {"thumb", "缩略图缓存"}, {"apkjunk", "冗余安装包"},
-                {"emptyjunk", "空文件"}, {"residue", "应用残留"}
+                {"emptyjunk", "空文件"}, {"residue", "应用残留"},
+                {"syscache", "系统缓存（全盘）"}
         };
         for (String[] cat : cats) {
             final String id = cat[0];
