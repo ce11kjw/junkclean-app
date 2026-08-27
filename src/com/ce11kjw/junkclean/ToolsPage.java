@@ -405,17 +405,13 @@ public class ToolsPage extends PageBase {
     }
 
     private void editExtMap() {
-        final EditText e = UI.multiline(act, "每行：.ext1,.ext2=分类名", act.store.extMap(), 8);
-        new android.app.AlertDialog.Builder(act)
-                .setTitle("分类映射")
-                .setView(e)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", new android.content.DialogInterface.OnClickListener() {
-                    public void onClick(android.content.DialogInterface d, int w) {
-                        act.store.setExtMap(e.getText().toString());
-                        act.toast("映射已保存");
-                    }
-                }).show();
+        UI.prompt(act, "分类映射", "每行：.ext1,.ext2=分类名", act.store.extMap(), 8,
+                new UI.Callback<String>() {
+            public void call(String v) {
+                act.store.setExtMap(v);
+                act.toast("映射已保存");
+            }
+        });
     }
 
     private void previewOrganize(final Organize.Rule r) {
@@ -484,18 +480,15 @@ public class ToolsPage extends PageBase {
         }
         if (hist.size() > n) sb.append("… 共 ").append(hist.size()).append(" 条记录");
 
-        new android.app.AlertDialog.Builder(act)
-                .setTitle("整理历史（" + hist.size() + " 条）")
-                .setMessage(sb.toString())
-                .setNeutralButton("清空记录", new android.content.DialogInterface.OnClickListener() {
-                    public void onClick(android.content.DialogInterface d, int w) {
+        UI.triple(act, "整理历史（" + hist.size() + " 条）", sb.toString(),
+                "清空记录", new Runnable() {
+                    public void run() {
                         Organize.clearHistory();
                         act.toast("历史已清空");
                     }
-                })
-                .setNegativeButton("关闭", null)
-                .setPositiveButton("全部还原", new android.content.DialogInterface.OnClickListener() {
-                    public void onClick(android.content.DialogInterface d, int w) {
+                },
+                "全部还原", new Runnable() {
+                    public void run() {
                         new Thread(new Runnable() {
                             public void run() {
                                 final int n = Organize.undoAll();
@@ -508,7 +501,7 @@ public class ToolsPage extends PageBase {
                             }
                         }).start();
                     }
-                }).show();
+                });
     }
 
     // ---------- 回收站 ----------

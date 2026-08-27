@@ -17,12 +17,49 @@ public class Store {
     }
 
     // ---------- 白名单 ----------
+
+    /**
+     * 内置保护路径：手机上存放用户重要内容的目录。
+     * 这些始终生效，不可通过清空白名单移除，避免误删照片、聊天记录、备份等。
+     */
+    public static final String[] PROTECTED = {
+            // 相册与影像
+            "DCIM", "Camera", "Pictures", "Screenshots", "ScreenRecorder", "MIUI/Gallery",
+            // 影音与文档
+            "Movies", "Music", "Documents", "Recordings", "Sounds", "Ringtones",
+            "Alarms", "Notifications", "Podcasts", "Audiobooks", "eBooks", "Books",
+            // 备份
+            "Backup", "Backups", "backup", "MIUI/backup", "ColorOS/Backup",
+            "Huawei/Backup", "Samsung/SmartSwitch", "SmartSwitch",
+            // 社交软件的用户内容
+            "MicroMsg", "WeiXin", "Weixin", "QQ_Images", "QQfile_recv", "Tencent/QQfile_recv",
+            "Tencent/MicroMsg", "Tencent/QQ_Images", "DingTalk", "Telegram", "WhatsApp",
+            // 笔记与同步盘
+            "Notes", "notes", "Obsidian", "Joplin", "MarginNote",
+            "Nextcloud", "Syncthing", "Dropbox", "OneDrive", "GoogleDrive", "aliyunpan",
+            // 开发与密钥
+            ".ssh", ".gnupg", "keystore", "KeyStore", ".android",
+            // 系统与工具配置
+            "Android/obb", "MagiskManager", "KernelSU", "APatch", "TWRP",
+            "Fonts", "Download/IDM", "Termux",
+            // 游戏存档
+            "games", "Games", "gameData", "Unity", "com.miHoYo"
+    };
+
+    /** 用户白名单 + 内置保护路径 */
     public List<String> whitelist() {
+        List<String> out = split(sp.getString("whitelist", ""));
+        for (String p : PROTECTED) if (!out.contains(p)) out.add(p);
+        return out;
+    }
+
+    /** 仅用户自定义部分（设置页编辑框用） */
+    public List<String> userWhitelist() {
         return split(sp.getString("whitelist", ""));
     }
 
     public boolean addWhitelist(String name) {
-        LinkedHashSet<String> set = new LinkedHashSet<String>(whitelist());
+        LinkedHashSet<String> set = new LinkedHashSet<String>(userWhitelist());
         boolean added = set.add(name);
         sp.edit().putString("whitelist", join(set)).apply();
         return added;

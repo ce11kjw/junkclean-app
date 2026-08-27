@@ -15,8 +15,8 @@ import java.util.List;
 public class SettingsPage extends PageBase {
 
     private ScrollView scroll;
-    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel, updUrl;
-    private TextView rootInfo, bgState, aiState, updState, permState;
+    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel;
+    private TextView rootInfo, bgState, aiState, updState, permState, aboutRuntime;
 
     public SettingsPage(MainActivity a) { super(a); }
 
@@ -388,6 +388,22 @@ public class SettingsPage extends PageBase {
     private View whitelistCard() {
         LinearLayout c = UI.card(act);
         c.addView(UI.note(act, "每行一个文件名、目录名或包名。所有扫描功能都会跳过。列表项长按可快捷加入。"));
+        LinearLayout pRow = UI.row(act);
+        pRow.addView(UI.badge(act, "内置保护 " + Store.PROTECTED.length + " 条",
+                Theme.ACCENT, Theme.alpha(Theme.ACCENT, 0x22)));
+        Button viewP = UI.chip(act, "查看", false);
+        viewP.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("以下目录始终受保护，不会被扫描或清理：\n\n");
+                for (String p : Store.PROTECTED) sb.append("· ").append(p).append('\n');
+                UI.info(act, "内置保护路径", sb.toString());
+            }
+        });
+        LinearLayout.LayoutParams vp = UI.lp(UI.WC, Theme.dp(act, 26));
+        vp.leftMargin = Theme.dp(act, 8);
+        pRow.addView(viewP, vp);
+        c.addView(pRow, UI.lpm(act, UI.MP, UI.WC, 8));
         wlInput = UI.multiline(act, "例如：\ncom.tencent.mm\nWeiXin", "", 4);
         c.addView(wlInput, UI.lpm(act, UI.MP, UI.WC, 10));
 
@@ -423,31 +439,45 @@ public class SettingsPage extends PageBase {
 
     private View updateCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "默认读取本项目 GitHub Release；也可填自定义 JSON（version / apkUrl / notes）"));
+        c.addView(UI.note(act, "当前版本 v" + MainActivity.VERSION));
 
-        updUrl = UI.input(act, "更新源地址", act.store.updateUrl());
-        c.addView(updUrl, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
+        updState = UI.note(act, "点击检查是否有新版本");
+        c.addView(updState, UI.lpm(act, UI.MP, UI.WC, 8));
 
-        updState = UI.note(act, "当前版本 v" + MainActivity.VERSION);
-        c.addView(updState, UI.lpm(act, UI.MP, UI.WC, 6));
-
-        Button save = UI.secondary(act, "保存地址");
         Button check = UI.primary(act, "检查更新");
-        save.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                act.store.setUpdateUrl(updUrl.getText().toString().trim());
-                act.toast("更新源已保存");
-            }
-        });
+        Button src = UI.secondary(act, "更新源");
         check.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { checkUpdate(); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, save, check), UI.lpm(act, UI.MP, UI.WC, 8));
+        src.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { editUpdateSource(); }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, check, src), UI.lpm(act, UI.MP, UI.WC, 6));
         return c;
     }
 
+    /** 更新源默认指向本项目 Release，一般用户不需要改，因此收进对话框 */
+    private void editUpdateSource() {
+        UI.prompt(act, "更新源地址",
+                "GitHub Release API 或自定义 JSON",
+                act.store.updateUrl(), 1,
+                new UI.Callback<String>() {
+            public void call(String v) {
+                String u = v.trim();
+                if (u.isEmpty()) {
+                    act.store.setUpdateUrl("");
+                    act.toast("已恢复默认更新源");
+                } else if (!u.startsWith("http://") && !u.startsWith("https://")) {
+                    act.toast("地址必须以 http(s):// 开头");
+                } else {
+                    act.store.setUpdateUrl(u);
+                    act.toast("更新源已保存");
+                }
+            }
+        });
+    }
+
     private void checkUpdate() {
-        act.store.setUpdateUrl(updUrl.getText().toString().trim());
         updState.setText("检查中…");
         new Thread(new Runnable() {
             public void run() {
@@ -465,9 +495,10 @@ public class SettingsPage extends PageBase {
                         }
                         updState.setText("发现新版本 v" + info.version);
                         String notes = info.notes;
-                        if (notes.length() > 600) notes = notes.substring(0, 600) + "…";
+                        if (notes.length() > 800) notes = notes.substring(0, 800) + "…";
                         UI.confirm(act, "发现新版本 v" + info.version,
-                                (notes.isEmpty() ? "" : notes + "\n\n") + "下载并安装？",
+                                (notes.isEmpty() ? "" : notes + "\n\n")
+                                + "点击「确定」立即下载并安装。",
                                 new Runnable() {
                             public void run() { doUpdate(info); }
                         });
@@ -477,24 +508,50 @@ public class SettingsPage extends PageBase {
         }).start();
     }
 
+    /** 下载 → 展示进度 → 自动调起安装 */
     private void doUpdate(final Updater.Info info) {
         if (info.apkUrl == null || info.apkUrl.isEmpty()) {
             updState.setText("更新源中没有 APK 下载地址");
+            act.toast("该更新源未提供安装包");
             return;
         }
-        updState.setText("下载中…");
+        final Object[] dlg = UI.progress(act, "下载更新 v" + info.version, "准备中…");
+        final android.app.Dialog d = (android.app.Dialog) dlg[0];
+        final TextView msg = (TextView) dlg[1];
+        final StorageBarView bar = (StorageBarView) dlg[2];
+
         new Thread(new Runnable() {
             public void run() {
-                final File f = Updater.download(act, info.apkUrl);
+                final java.io.File f = Updater.download(act, info.apkUrl, new Net.Progress() {
+                    public void onProgress(final int done, final int total) {
+                        ui.post(new Runnable() {
+                            public void run() {
+                                msg.setText(Util.fmtSize(done) + " / " + Util.fmtSize(total));
+                                bar.setPercent(total > 0 ? done * 100f / total : 0);
+                            }
+                        });
+                    }
+                });
                 ui.post(new Runnable() {
                     public void run() {
+                        d.dismiss();
                         if (f == null) {
-                            updState.setText("下载失败");
+                            updState.setText("下载失败：" + Updater.lastError);
+                            UI.confirm(act, "下载失败",
+                                    "原因：" + Updater.lastError
+                                    + "\n\n可稍后重试，或到 GitHub 手动下载安装包。",
+                                    null);
                             return;
                         }
+                        updState.setText("已下载：" + Util.shortPath(f.getAbsolutePath()));
                         boolean ok = Updater.install(act, f);
-                        updState.setText(ok ? "已调起安装程序"
-                                : "无法自动安装，请手动打开：\n" + Updater.publicApkPath());
+                        if (!ok) {
+                            UI.confirm(act, "无法自动安装",
+                                    "安装包已保存到：\n" + Updater.publicApkPath()
+                                    + "\n\n请用文件管理器打开手动安装。"
+                                    + "\n若系统提示禁止安装未知应用，需在设置中允许本应用安装。",
+                                    null);
+                        }
                     }
                 });
             }
@@ -505,20 +562,99 @@ public class SettingsPage extends PageBase {
 
     private View aboutCard() {
         LinearLayout c = UI.card(act);
+
+        TextView name = UI.text(act, "JunkClean", 18, Theme.TEXT);
+        name.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        c.addView(name);
+        c.addView(UI.text(act, "v" + MainActivity.VERSION + " · Android 垃圾清理工具",
+                12, Theme.ACCENT), UI.lpm(act, UI.MP, UI.WC, 2));
+
+        c.addView(UI.divider(act));
+
+        c.addView(UI.h2(act, "功能"));
         c.addView(UI.note(act,
-                "JunkClean v" + MainActivity.VERSION + "\n"
-                + "Android 垃圾清理工具 · 深空玻璃 UI\n"
-                + "纯原生 Java，无第三方依赖\n"
-                + "有 root 深度清理，无 root 自动降级\n\n"
-                + "App：github.com/ce11kjw/junkclean-app\n"
-                + "模块：github.com/ce11kjw/junkclean"));
+                "· 9 类垃圾扫描，支持 root 全盘模式\n"
+              + "· 大文件 / 重复文件 / 空文件 / 安装包专项\n"
+              + "· 文件清理：浏览目录手动删除任意文件\n"
+              + "· 整理中心：按类型归档，可预览与还原\n"
+              + "· 回收站：误删可恢复，支持保留期\n"
+              + "· AI 清理建议（OpenAI 兼容接口）\n"
+              + "· 清理统计与 7 天趋势"), UI.lpm(act, UI.MP, UI.WC, 4));
+
+        c.addView(UI.h2(act, "安全设计"), UI.lpm(act, UI.MP, UI.WC, 12));
+        c.addView(UI.note(act,
+                "· 内置 " + Store.PROTECTED.length + " 条保护路径，覆盖相册、聊天记录、备份、密钥等\n"
+              + "· 路径白名单机制，拒绝 .. 遍历与系统根目录操作\n"
+              + "· 只删除已勾选项，删除前二次确认\n"
+              + "· 谨慎分类默认不勾选"), UI.lpm(act, UI.MP, UI.WC, 4));
+
+        c.addView(UI.h2(act, "技术"), UI.lpm(act, UI.MP, UI.WC, 12));
+        c.addView(UI.note(act,
+                "· 纯原生 Java，无第三方依赖，无 Gradle\n"
+              + "· 界面代码构建，自绘存储条与统计图\n"
+              + "· minSdk 26 / targetSdk 34\n"
+              + "· 有 root 深度清理，无 root 自动降级"), UI.lpm(act, UI.MP, UI.WC, 4));
+
+        c.addView(UI.h2(act, "运行状态"), UI.lpm(act, UI.MP, UI.WC, 12));
+        aboutRuntime = UI.note(act, "");
+        c.addView(aboutRuntime, UI.lpm(act, UI.MP, UI.WC, 4));
+
+        c.addView(UI.divider(act));
+
+        c.addView(UI.h2(act, "项目地址"));
+        c.addView(UI.note(act,
+                "App：github.com/ce11kjw/junkclean-app\n"
+              + "模块：github.com/ce11kjw/junkclean\n"
+              + "许可：MIT"), UI.lpm(act, UI.MP, UI.WC, 4));
+
+        Button copyInfo = UI.secondary(act, "复制诊断信息");
+        Button openRepo = UI.secondary(act, "打开项目主页");
+        copyInfo.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { copyDiagnostics(); }
+        });
+        openRepo.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                try {
+                    android.content.Intent i = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/ce11kjw/junkclean-app"));
+                    i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    act.startActivity(i);
+                } catch (Exception e) {
+                    act.toast("没有可用的浏览器");
+                }
+            }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, copyInfo, openRepo), UI.lpm(act, UI.MP, UI.WC, 12));
         return c;
+    }
+
+    private void copyDiagnostics() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("JunkClean v").append(MainActivity.VERSION).append('\n');
+        sb.append("设备：").append(android.os.Build.MANUFACTURER).append(' ')
+          .append(android.os.Build.MODEL).append('\n');
+        sb.append("系统：Android ").append(android.os.Build.VERSION.RELEASE)
+          .append(" (API ").append(android.os.Build.VERSION.SDK_INT).append(")\n");
+        sb.append("root：").append(Shell.hasRoot() ? Shell.detectManager() : "无").append('\n');
+        sb.append("存储权限：").append(act.hasStoragePermission() ? "已授予" : "未授予").append('\n');
+        sb.append("应用列表权限：").append(act.hasPackagePermission() ? "已授予" : "未授予").append('\n');
+        sb.append("全盘扫描：").append(act.store.fullScan() ? "开启" : "关闭").append('\n');
+        sb.append("主题：").append(act.store.theme()).append(" / ").append(act.store.accent()).append('\n');
+        sb.append("壁纸：").append(Wallpaper.exists(act) ? "已启用" : "未启用").append('\n');
+        sb.append("累计清理：").append(act.store.totalCount()).append(" 项 / ")
+          .append(Util.fmtSize(act.store.totalFreed()));
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                act.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("JunkClean", sb.toString()));
+        act.toast("诊断信息已复制");
     }
 
     // ---------- 刷新 ----------
 
     public void refresh() {
         if (rootInfo == null) return;
+        Store s = act.store;
         boolean root = Shell.hasRoot();
         rootInfo.setText((root ? "✓ 已获得 root（" + Shell.detectManager() + "）" : "⚠ 未检测到 root")
                 + "\n清理模式：" + (root ? "深度（全应用缓存 + 系统日志）"
@@ -526,12 +662,17 @@ public class SettingsPage extends PageBase {
                 + "\n设备：" + android.os.Build.MODEL
                 + " · Android " + android.os.Build.VERSION.RELEASE);
 
+        if (aboutRuntime != null) {
+            aboutRuntime.setText("root：" + (Shell.hasRoot() ? Shell.detectManager() : "未获得")
+                    + "\n设备：" + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
+                    + "\n系统：Android " + android.os.Build.VERSION.RELEASE
+                    + "（API " + android.os.Build.VERSION.SDK_INT + "）"
+                    + "\n累计清理：" + s.totalCount() + " 项 / " + Util.fmtSize(s.totalFreed()));
+        }
         permState.setText("应用列表权限：" + (act.hasPackagePermission() ? "已授予" : "未授予（影响残留与安装包识别）")
                 + "\n存储权限：" + (act.hasStoragePermission() ? "已授予" : "未授予"));
-
-        Store s = act.store;
         StringBuilder wl = new StringBuilder();
-        for (String w : s.whitelist()) {
+        for (String w : s.userWhitelist()) {
             if (wl.length() > 0) wl.append('\n');
             wl.append(w);
         }
@@ -542,6 +683,5 @@ public class SettingsPage extends PageBase {
         if (aiEndpoint != null) aiEndpoint.setText(s.aiEndpoint());
         if (aiKey != null) aiKey.setText(s.aiKey());
         if (aiModel != null) aiModel.setText(s.aiModel());
-        if (updUrl != null) updUrl.setText(s.updateUrl());
     }
 }

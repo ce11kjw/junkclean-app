@@ -152,6 +152,28 @@ public final class Theme {
         return g;
     }
 
+    /** 对话框容器：玻璃模式下半透明 + 高光，否则实色卡片 */
+    public static Drawable dialog(Context c) {
+        float r = dp(c, 22);
+        if (!glass) {
+            GradientDrawable g = new GradientDrawable();
+            g.setCornerRadius(r);
+            g.setColor(light ? 0xFFFFFFFF : 0xFF15151F);
+            g.setStroke(dp(c, 1), LINE2);
+            return g;
+        }
+        GradientDrawable base = new GradientDrawable();
+        base.setCornerRadius(r);
+        base.setColor(light ? alpha(0xFFFFFF, 0xF0) : alpha(0x14141F, 0xF0));
+        base.setStroke(dp(c, 1), light ? alpha(0x000000, 0x1E) : alpha(0xFFFFFF, 0x2E));
+        GradientDrawable gloss = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{light ? alpha(0xFFFFFF, 0x70) : alpha(0xFFFFFF, 0x22),
+                          alpha(0xFFFFFF, 0x00)});
+        gloss.setCornerRadius(r);
+        return new LayerDrawable(new Drawable[]{base, gloss});
+    }
+
     /** 底部导航容器 */
     public static Drawable navBar(Context c) {
         GradientDrawable g = new GradientDrawable();

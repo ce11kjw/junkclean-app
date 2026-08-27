@@ -26,8 +26,11 @@ public final class Updater {
         String url = store.updateUrl().trim();
         if (url.isEmpty()) { info.error = "未配置更新地址"; return info; }
 
-        byte[] data = Net.download(url, 15000, 2 * 1024 * 1024);
-        if (data == null) { info.error = "无法访问更新地址"; return info; }
+        byte[] data = Net.download(url, 20000, 4 * 1024 * 1024);
+        if (data == null) {
+            info.error = Net.lastError.isEmpty() ? "无法访问更新地址" : Net.lastError;
+            return info;
+        }
         String json;
         try { json = new String(data, "UTF-8"); }
         catch (Exception e) { info.error = "响应编码异常"; return info; }
@@ -82,15 +85,30 @@ public final class Updater {
         try { return Integer.parseInt(s.trim()); } catch (Exception e) { return 0; }
     }
 
-    /** 下载 APK 到私有目录，返回文件；失败返回 null */
-    public static File download(Context c, String url) {
-        byte[] data = Net.download(url, 60000, 64 * 1024 * 1024);
-        if (data == null || data.length < 1024) return null;
-        // APK 是 zip，头部应为 PK\003\004
-        if (!(data[0] == 0x50 && data[1] == 0x4B)) return null;
+    /** 最近一次下载失败的原因 */
+    public static String lastError = "";
+
+    /** 下载 APK 到公共下载目录，返回文件；失败返回 null */
+    public static File download(Context c, String url, Net.Progress cb) {
+        lastError = "";
+        byte[] data = Net.download(url, 120000, 128 * 1024 * 1024, cb);
+        if (data == null) {
+            lastError = Net.lastError.isEmpty() ? "网络错误" : Net.lastError;
+            return null;
+        }
+        if (data.length < 4096) {
+            lastError = "文件过小，可能不是有效安装包";
+            return null;
+        }
+        // APK 本质是 zip，头部必须是 PK
+        if (!(data[0] == 0x50 && data[1] == 0x4B)) {
+            lastError = "不是有效的 APK（缺少 zip 头）";
+            return null;
+        }
         try {
-            File dir = new File(c.getFilesDir(), "update");
-            dir.mkdirs();
+            // 直接写公共 Download，系统安装器才能读到
+            File dir = new File(Util.sdRoot() + "/Download");
+            if (!dir.exists()) dir.mkdirs();
             File f = new File(dir, "JunkClean-update.apk");
             FileOutputStream out = new FileOutputStream(f);
             out.write(data);
@@ -98,34 +116,60 @@ public final class Updater {
             f.setReadable(true, false);
             return f;
         } catch (Exception e) {
+            lastError = "写入失败：" + e.getMessage();
             return null;
         }
     }
 
-    /** 调起系统安装器 */
+    /**
+     * 调起系统安装器。
+     * Android 7+ 不允许传 file:// URI，这里用 MediaStore 查询已落盘文件拿 content://；
+     * 拿不到时退回 file://（旧系统可用），全部失败则由调用方提示手动安装。
+     */
     public static boolean install(Context c, File apk) {
+        Uri uri = contentUri(c, apk);
+        if (uri == null) uri = Uri.fromFile(apk);
         try {
-            Uri uri = androidx_FileProvider_fallback(c, apk);
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setDataAndType(uri, "application/vnd.android.package-archive");
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             c.startActivity(i);
             return true;
         } catch (Exception e) {
+            lastError = e.getClass().getSimpleName();
             return false;
         }
     }
 
-    /**
-     * 不引入 androidx，直接把文件复制到公共下载目录再用 file:// 打开。
-     * Android 7+ 禁止直接分享 file://，因此改为提示用户手动安装。
-     */
-    private static Uri androidx_FileProvider_fallback(Context c, File apk) {
-        File pub = new File(Util.sdRoot() + "/Download/JunkClean-update.apk");
-        if (Util.move(new File(apk.getAbsolutePath()), pub)) {
-            return Uri.fromFile(pub);
+    /** 通过 MediaStore 反查已落盘文件的 content:// */
+    private static Uri contentUri(Context c, File apk) {
+        try {
+            android.database.Cursor cur = c.getContentResolver().query(
+                    android.provider.MediaStore.Files.getContentUri("external"),
+                    new String[]{android.provider.MediaStore.Files.FileColumns._ID},
+                    android.provider.MediaStore.Files.FileColumns.DATA + "=?",
+                    new String[]{apk.getAbsolutePath()}, null);
+            if (cur != null) {
+                Uri u = null;
+                if (cur.moveToFirst()) {
+                    long id = cur.getLong(0);
+                    u = Uri.withAppendedPath(
+                            android.provider.MediaStore.Files.getContentUri("external"),
+                            String.valueOf(id));
+                }
+                cur.close();
+                if (u != null) return u;
+            }
+            // 未收录则主动插入一条记录
+            android.content.ContentValues v = new android.content.ContentValues();
+            v.put(android.provider.MediaStore.Files.FileColumns.DATA, apk.getAbsolutePath());
+            v.put(android.provider.MediaStore.Files.FileColumns.MIME_TYPE,
+                    "application/vnd.android.package-archive");
+            return c.getContentResolver().insert(
+                    android.provider.MediaStore.Files.getContentUri("external"), v);
+        } catch (Throwable t) {
+            return null;
         }
-        return Uri.fromFile(apk);
     }
 
     /** 返回公共下载目录中的更新包路径，供 UI 提示 */

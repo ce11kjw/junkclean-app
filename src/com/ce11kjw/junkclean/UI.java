@@ -1,6 +1,5 @@
 package com.ce11kjw.junkclean;
 
-import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Typeface;
 import android.text.TextUtils;
@@ -245,32 +244,198 @@ public final class UI {
         return r;
     }
 
+    // ================= 拟态玻璃对话框 =================
+
+    /** 构造玻璃风格对话框骨架，返回 [dialog, 内容容器] */
+    private static Object[] glassDialog(Context c, String title) {
+        final android.app.Dialog d = new android.app.Dialog(c);
+        d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+
+        LinearLayout wrap = col(c);
+        wrap.setBackground(Theme.dialog(c));
+        int p = Theme.dp(c, 20);
+        wrap.setPadding(p, Theme.dp(c, 18), p, Theme.dp(c, 14));
+
+        if (title != null && !title.isEmpty()) {
+            TextView t = text(c, title, 16, Theme.TEXT);
+            t.setTypeface(Typeface.DEFAULT_BOLD);
+            wrap.addView(t);
+        }
+
+        LinearLayout body = col(c);
+        wrap.addView(body, lpm(c, MP, WC, title == null ? 0 : 10));
+
+        d.setContentView(wrap);
+        android.view.Window w = d.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
+            w.setDimAmount(Theme.glass ? 0.45f : 0.6f);
+            android.view.WindowManager.LayoutParams lp = w.getAttributes();
+            lp.width = (int) (c.getResources().getDisplayMetrics().widthPixels * 0.88f);
+            w.setAttributes(lp);
+        }
+        return new Object[]{d, body, wrap};
+    }
+
+    /** 底部按钮行（对话框用） */
+    private static void dialogButtons(Context c, LinearLayout wrap, final android.app.Dialog d,
+                                      String okText, final Runnable onOk,
+                                      String cancelText) {
+        Button ok = primary(c, okText);
+        ok.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                d.dismiss();
+                if (onOk != null) onOk.run();
+            }
+        });
+        if (cancelText == null) {
+            wrap.addView(btnRow(c, BTN_H, ok), lpm(c, MP, WC, 16));
+            return;
+        }
+        Button cancel = secondary(c, cancelText);
+        cancel.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); }
+        });
+        wrap.addView(btnRow(c, BTN_H, cancel, ok), lpm(c, MP, WC, 16));
+    }
+
     /** 确认对话框 */
     public static void confirm(Context c, String title, String msg, final Runnable onOk) {
-        new AlertDialog.Builder(c)
-                .setTitle(title)
-                .setMessage(msg)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("确定", new android.content.DialogInterface.OnClickListener() {
-                    public void onClick(android.content.DialogInterface d, int w) { onOk.run(); }
-                })
-                .show();
+        Object[] parts = glassDialog(c, title);
+        android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        TextView m = text(c, msg, 13, Theme.MUTED);
+        m.setLineSpacing(0, 1.45f);
+        body.addView(m);
+        dialogButtons(c, wrap, d, "确定", onOk, "取消");
+        d.show();
     }
 
     /** 单选对话框 */
-    public static void pick(Context c, String title, final String[] labels, int checked,
+    public static void pick(Context c, String title, final String[] labels, final int checked,
                             final android.content.DialogInterface.OnClickListener cb) {
-        new AlertDialog.Builder(c)
-                .setTitle(title)
-                .setSingleChoiceItems(labels, checked, cb)
-                .setNegativeButton("关闭", null)
-                .show();
+        Object[] parts = glassDialog(c, title);
+        final android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        for (int i = 0; i < labels.length; i++) {
+            final int idx = i;
+            LinearLayout row = row(c);
+            row.setBackground(Theme.inner(c, 12));
+            int pd = Theme.dp(c, 12);
+            row.setPadding(pd, Theme.dp(c, 10), pd, Theme.dp(c, 10));
+            TextView t = text(c, labels[i], 13.5f, idx == checked ? Theme.ACCENT : Theme.TEXT);
+            row.addView(t, new LinearLayout.LayoutParams(0, WC, 1f));
+            if (idx == checked) row.addView(text(c, "✓", 14, Theme.ACCENT));
+            row.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    if (cb != null) cb.onClick(d, idx);
+                    d.dismiss();
+                }
+            });
+            body.addView(row, lpm(c, MP, WC, i == 0 ? 0 : 6));
+        }
+        dialogButtons(c, wrap, d, "关闭", null, null);
+        d.show();
     }
 
-    /** 纯文本对话框（用于预览清单） */
-    public static void info(Context c, String title, String body) {
-        new AlertDialog.Builder(c).setTitle(title).setMessage(body)
-                .setPositiveButton("知道了", null).show();
+    /** 长文本对话框（预览清单等），内容可滚动 */
+    public static void info(Context c, String title, String bodyText) {
+        Object[] parts = glassDialog(c, title);
+        android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        TextView m = text(c, bodyText, 12, Theme.MUTED);
+        m.setLineSpacing(0, 1.4f);
+        android.widget.ScrollView sv = new android.widget.ScrollView(c);
+        sv.setVerticalScrollBarEnabled(false);
+        sv.addView(m);
+        int maxH = (int) (c.getResources().getDisplayMetrics().heightPixels * 0.5f);
+        body.addView(sv, new LinearLayout.LayoutParams(MP, maxH));
+        dialogButtons(c, wrap, d, "知道了", null, null);
+        d.show();
+    }
+
+    /** 带输入框的对话框 */
+    public static void prompt(Context c, String title, String hint, String value,
+                              final int minLines, final Callback<String> onOk) {
+        Object[] parts = glassDialog(c, title);
+        final android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        final EditText e = minLines > 1 ? multiline(c, hint, value, minLines) : input(c, hint, value);
+        body.addView(e, minLines > 1 ? lp(MP, WC) : lp(MP, Theme.dp(c, BTN_H)));
+
+        Button ok = primary(c, "确定");
+        Button cancel = secondary(c, "取消");
+        ok.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                d.dismiss();
+                if (onOk != null) onOk.call(e.getText().toString());
+            }
+        });
+        cancel.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); }
+        });
+        wrap.addView(btnRow(c, BTN_H, cancel, ok), lpm(c, MP, WC, 16));
+        d.show();
+    }
+
+    /** 三按钮对话框（如：清空 / 关闭 / 全部还原） */
+    public static void triple(Context c, String title, String msg,
+                              String leftText, final Runnable onLeft,
+                              String rightText, final Runnable onRight) {
+        Object[] parts = glassDialog(c, title);
+        final android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        TextView m = text(c, msg, 12, Theme.MUTED);
+        m.setLineSpacing(0, 1.4f);
+        android.widget.ScrollView sv = new android.widget.ScrollView(c);
+        sv.setVerticalScrollBarEnabled(false);
+        sv.addView(m);
+        int maxH = (int) (c.getResources().getDisplayMetrics().heightPixels * 0.42f);
+        body.addView(sv, new LinearLayout.LayoutParams(MP, maxH));
+
+        Button left = secondary(c, leftText);
+        Button close = secondary(c, "关闭");
+        Button right = primary(c, rightText);
+        left.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); if (onLeft != null) onLeft.run(); }
+        });
+        close.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); }
+        });
+        right.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); if (onRight != null) onRight.run(); }
+        });
+        wrap.addView(btnRow(c, BTN_H, left, close, right), lpm(c, MP, WC, 16));
+        d.show();
+    }
+
+    /** 进度对话框，返回可更新文本的句柄 */
+    public static Object[] progress(Context c, String title, String initial) {
+        Object[] parts = glassDialog(c, title);
+        android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        TextView m = text(c, initial, 13, Theme.MUTED);
+        body.addView(m);
+        StorageBarView bar = new StorageBarView(c);
+        body.addView(bar, lpm(c, MP, WC, 12));
+        d.setCancelable(false);
+        d.show();
+        return new Object[]{d, m, bar};
+    }
+
+    /** 简单回调 */
+    public interface Callback<T> {
+        void call(T value);
     }
 
     /** 文件项行：勾选框 + 名称 + 体积，可选长按回调 */

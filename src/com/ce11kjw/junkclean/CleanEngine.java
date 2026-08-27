@@ -55,11 +55,15 @@ public class CleanEngine {
 
     private void step(String path, long size, Result r, StringBuilder batch, boolean systemPath) {
         if (!isSafe(path)) {
-            r.errors.add("拒绝: " + Util.shortPath(path));
+            r.errors.add("受保护路径：" + Util.shortPath(path));
             return;
         }
         File f = new File(path);
-        if (!f.exists()) return;
+        if (!f.exists()) {
+            // 文件已不在（可能上一轮已删），算作成功，不报错
+            r.count++;
+            return;
+        }
 
         // sdcard 上的用户文件走回收站；系统缓存目录直接删（回收站装不下也没意义）
         boolean sdFile = path.startsWith(Util.sdRoot() + "/");
@@ -71,18 +75,40 @@ public class CleanEngine {
                 r.toTrash++;
                 return;
             }
+            // 回收站失败（跨分区、空间不足等）时继续走直删，不静默丢弃
         }
 
         if (Util.rmrf(f)) {
             r.freed += size;
             r.count++;
-        } else if (root) {
+            return;
+        }
+
+        if (root) {
             // 攒批量 root 删除，flush 后统一校验，避免乐观计数
             batch.append("rm -rf ").append(Shell.quote(path)).append('\n');
             pendingRoot.add(new Object[]{path, Long.valueOf(size)});
         } else {
-            r.errors.add(Util.shortPath(path));
+            r.errors.add(reason(f) + "：" + Util.shortPath(path));
         }
+    }
+
+    /** 推断删除失败原因，便于用户判断该怎么办 */
+    private String reason(File f) {
+        if (!f.canWrite()) {
+            String p = f.getAbsolutePath();
+            if (p.startsWith(Util.sdRoot() + "/Android/data")
+                    || p.startsWith(Util.sdRoot() + "/Android/obb")) {
+                return "Android/data 受限（需 root 或 SAF 授权）";
+            }
+            return "无写入权限";
+        }
+        if (f.isDirectory()) {
+            File[] kids = f.listFiles();
+            if (kids != null && kids.length > 0) return "目录未能清空";
+            return "目录删除被拒绝";
+        }
+        return "删除被拒绝（可能被其他应用占用）";
     }
 
     /** 执行 root 批量删除并校验结果，只有真正消失的才计入释放量 */

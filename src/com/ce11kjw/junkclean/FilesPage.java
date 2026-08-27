@@ -46,6 +46,13 @@ public class FilesPage extends PageBase {
     private TextView apkSum;
     private List<Finder.ApkInfo> apkItems = new ArrayList<Finder.ApkInfo>();
 
+    // 文件清理（目录浏览）
+    private LinearLayout brList;
+    private TextView brPath, brSum;
+    private String brCur;
+    private List<Browser.Entry> brItems = new ArrayList<Browser.Entry>();
+    private boolean brDirSize = true;
+
     public FilesPage(MainActivity a) { super(a); }
 
     @Override
@@ -63,6 +70,8 @@ public class FilesPage extends PageBase {
         root.addView(emptyCard());
         root.addView(UI.section(act, "安装包"));
         root.addView(apkCard());
+        root.addView(UI.section(act, "文件清理"));
+        root.addView(browseCard());
         root.addView(UI.spacer(act, 24));
 
         scroll = new ScrollView(act);
@@ -361,8 +370,8 @@ public class FilesPage extends PageBase {
                                 ScanEngine.invalidate();
                                 String msg = "已处理 " + r.count + " 个副本 · "
                                         + Util.fmtSize(toTrash ? r.trashed : r.freed);
-                                if (!r.errors.isEmpty()) msg += " · " + r.errors.size() + " 项失败";
                                 act.toast(msg);
+                                if (!r.errors.isEmpty()) showErrors(r.errors);
                                 act.homePage().refreshDisk();
                                 scanDup();
                             }
@@ -508,6 +517,200 @@ public class FilesPage extends PageBase {
             r.addView(sz, sp);
             apkList.addView(r);
         }
+    }
+
+    // ---------- 文件清理 ----------
+
+    private View browseCard() {
+        LinearLayout c = UI.card(act);
+        c.addView(UI.note(act, "浏览目录并手动删除任意文件或文件夹。重要目录会标记保护，不允许删除。"));
+
+        brPath = UI.text(act, "", 11.5f, Theme.ACCENT);
+        brPath.setSingleLine(true);
+        brPath.setEllipsize(android.text.TextUtils.TruncateAt.START);
+        c.addView(brPath, UI.lpm(act, UI.MP, UI.WC, 10));
+
+        c.addView(UI.switchRow(act, "计算文件夹体积", "关闭可加快大目录加载", brDirSize,
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                brDirSize = on;
+                if (brCur != null) loadBrowse(brCur);
+            }
+        }));
+
+        brSum = UI.note(act, "");
+        c.addView(brSum, UI.lpm(act, UI.MP, UI.WC, 6));
+        brList = UI.col(act);
+        c.addView(brList, UI.lpm(act, UI.MP, UI.WC, 4));
+
+        Button jump = UI.secondary(act, "快捷目录");
+        Button up = UI.secondary(act, "上一级");
+        Button del = UI.danger(act, "删除选中");
+        jump.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { pickShortcut(); }
+        });
+        up.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                String p = Browser.parent(brCur == null ? Util.sdRoot() : brCur);
+                if (p == null) { act.toast("已在存储根目录"); return; }
+                loadBrowse(p);
+            }
+        });
+        del.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { delBrowse(); }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, jump, up, del), UI.lpm(act, UI.MP, UI.WC, 10));
+
+        loadBrowse(Util.sdRoot());
+        return c;
+    }
+
+    private void pickShortcut() {
+        final String[][] sc = Browser.shortcuts();
+        String[] labels = new String[sc.length];
+        for (int i = 0; i < sc.length; i++) labels[i] = sc[i][0];
+        UI.pick(act, "跳转到", labels, -1, new android.content.DialogInterface.OnClickListener() {
+            public void onClick(android.content.DialogInterface d, int w) {
+                if (!new File(sc[w][1]).isDirectory()) { act.toast("目录不存在"); return; }
+                loadBrowse(sc[w][1]);
+            }
+        });
+    }
+
+    private void loadBrowse(final String path) {
+        brCur = path;
+        brPath.setText(Util.shortPath(path));
+        brList.removeAllViews();
+        brSum.setText("读取中…");
+        new Thread(new Runnable() {
+            public void run() {
+                final List<Browser.Entry> list = Browser.list(path, brDirSize);
+                ui.post(new Runnable() {
+                    public void run() {
+                        brItems = list;
+                        renderBrowse();
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void renderBrowse() {
+        brList.removeAllViews();
+        if (brItems.isEmpty()) {
+            brSum.setText("");
+            brList.addView(UI.empty(act, "目录为空"));
+            return;
+        }
+        long total = 0;
+        for (Browser.Entry e : brItems) total += e.size;
+        brSum.setText(brItems.size() + " 项 · 合计 " + Util.fmtSize(total)
+                + "（点击文件夹进入，长按加入白名单）");
+
+        int shown = 0;
+        for (final Browser.Entry e : brItems) {
+            if (++shown > 120) {
+                brList.addView(UI.note(act, "… 还有 " + (brItems.size() - 120) + " 项未显示"));
+                break;
+            }
+            LinearLayout r = UI.row(act);
+            r.setPadding(0, Theme.dp(act, 5), 0, Theme.dp(act, 5));
+
+            final CheckBox cb = UI.check(act, false);
+            cb.setEnabled(!e.protectedPath);
+            cb.setAlpha(e.protectedPath ? 0.3f : 1f);
+            cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+                public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                    e.checked = on;
+                    updateBrowseSum();
+                }
+            });
+            r.addView(cb);
+
+            TextView nm = UI.text(act, (e.dir ? "📁  " : "📄  ") + e.name, 12,
+                    e.protectedPath ? Theme.DIM : Theme.MUTED);
+            nm.setSingleLine(true);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, UI.WC, 1f);
+            np.leftMargin = Theme.dp(act, 4);
+            r.addView(nm, np);
+
+            if (e.protectedPath) {
+                r.addView(UI.badge(act, "保护", Theme.ACCENT, Theme.alpha(Theme.ACCENT, 0x22)));
+            }
+            String meta = e.dir
+                    ? (brDirSize ? Util.fmtSize(e.size) : e.children + " 项")
+                    : Util.fmtSize(e.size);
+            TextView sz = UI.text(act, meta, 11, Theme.DIM);
+            LinearLayout.LayoutParams sp = UI.lp(UI.WC, UI.WC);
+            sp.leftMargin = Theme.dp(act, 6);
+            r.addView(sz, sp);
+
+            if (e.dir) {
+                nm.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) { loadBrowse(e.path); }
+                });
+            }
+            r.setOnLongClickListener(new View.OnLongClickListener() {
+                public boolean onLongClick(View v) {
+                    act.store.addWhitelist(e.name);
+                    ScanEngine.invalidate();
+                    act.toast("已加入白名单：" + e.name);
+                    return true;
+                }
+            });
+            brList.addView(r);
+        }
+    }
+
+    private void updateBrowseSum() {
+        int n = 0;
+        long sz = 0;
+        for (Browser.Entry e : brItems) if (e.checked) { n++; sz += e.size; }
+        if (n == 0) {
+            brSum.setText(brItems.size() + " 项（点击文件夹进入，长按加入白名单）");
+        } else {
+            brSum.setText("已选 " + n + " 项 · " + Util.fmtSize(sz));
+        }
+    }
+
+    private void delBrowse() {
+        final List<JunkItem> sel = new ArrayList<JunkItem>();
+        int dirs = 0;
+        for (Browser.Entry e : brItems) {
+            if (!e.checked || e.protectedPath) continue;
+            sel.add(new JunkItem(e.path, e.name, e.size));
+            if (e.dir) dirs++;
+        }
+        if (sel.isEmpty()) { act.toast("未选中项目"); return; }
+        long total = 0;
+        for (JunkItem it : sel) total += it.size;
+        final boolean toTrash = act.store.toTrash();
+        String detail = "共 " + sel.size() + " 项"
+                + (dirs > 0 ? "（含 " + dirs + " 个文件夹，将连同内部文件一起删除）" : "")
+                + "，约 " + Util.fmtSize(total)
+                + (toTrash ? "\n\n先移入回收站，可恢复。" : "\n\n直接删除，无法恢复！");
+        UI.confirm(act, "删除所选", detail, new Runnable() {
+            public void run() {
+                new Thread(new Runnable() {
+                    public void run() {
+                        final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
+                        ui.post(new Runnable() {
+                            public void run() {
+                                act.store.addStat(r.freed, r.count);
+                                ScanEngine.invalidate();
+                                String msg = "已处理 " + r.count + " 项 · "
+                                        + Util.fmtSize(toTrash ? r.trashed : r.freed);
+                                act.toast(msg);
+                                if (!r.errors.isEmpty()) showErrors(r.errors);
+                                act.homePage().refreshDisk();
+                                loadBrowse(brCur);
+                            }
+                        });
+                    }
+                }).start();
+            }
+        });
     }
 
     private void delApk() {

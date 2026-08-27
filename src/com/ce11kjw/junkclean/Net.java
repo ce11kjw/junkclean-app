@@ -10,6 +10,11 @@ import java.net.URL;
 /** 极简 HTTP 客户端（HttpURLConnection，无第三方依赖） */
 public final class Net {
 
+    /** 下载进度回调 */
+    public interface Progress {
+        void onProgress(int done, int total);
+    }
+
     private Net() {}
 
     /** POST JSON，返回响应体；失败返回 "ERR:" 前缀的说明 */
@@ -22,6 +27,7 @@ public final class Net {
             conn.setReadTimeout(timeoutMs);
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("User-Agent", "JunkClean-App");
             if (bearer != null && !bearer.isEmpty()) {
                 conn.setRequestProperty("Authorization", "Bearer " + bearer);
             }
@@ -42,27 +48,49 @@ public final class Net {
         }
     }
 
+    /** 最近一次 download 的失败原因，供 UI 展示 */
+    public static String lastError = "";
+
     /** 下载二进制到字节数组，超出 maxBytes 视为失败 */
     public static byte[] download(String url, int timeoutMs, int maxBytes) {
+        return download(url, timeoutMs, maxBytes, null);
+    }
+
+    public static byte[] download(String url, int timeoutMs, int maxBytes, Progress cb) {
+        lastError = "";
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setConnectTimeout(timeoutMs);
             conn.setReadTimeout(timeoutMs);
             conn.setInstanceFollowRedirects(true);
-            if (conn.getResponseCode() >= 400) return null;
+            // GitHub API 拒绝没有 User-Agent 的请求（403）
+            conn.setRequestProperty("User-Agent", "JunkClean-App");
+            conn.setRequestProperty("Accept", "*/*");
+            int code = conn.getResponseCode();
+            if (code >= 400) {
+                lastError = "HTTP " + code;
+                return null;
+            }
+            int len = conn.getContentLength();
             InputStream in = conn.getInputStream();
             java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-            byte[] buf = new byte[16384];
+            byte[] buf = new byte[32768];
             int n, total = 0;
             while ((n = in.read(buf)) > 0) {
                 total += n;
-                if (total > maxBytes) { in.close(); return null; }
+                if (total > maxBytes) {
+                    in.close();
+                    lastError = "超过大小上限";
+                    return null;
+                }
                 bos.write(buf, 0, n);
+                if (cb != null && len > 0) cb.onProgress(total, len);
             }
             in.close();
             return bos.toByteArray();
         } catch (Exception e) {
+            lastError = e.getClass().getSimpleName() + " " + String.valueOf(e.getMessage());
             return null;
         } finally {
             if (conn != null) conn.disconnect();

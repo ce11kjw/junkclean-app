@@ -85,8 +85,8 @@ public abstract class PageBase {
                                 String msg = (toTrash ? "已移入回收站 " : "已删除 ") + r.count + " 项 · "
                                         + Util.fmtSize(toTrash ? r.trashed : r.freed)
                                         + (toTrash ? "（清空后才释放）" : "");
-                                if (!r.errors.isEmpty()) msg += " · " + r.errors.size() + " 项失败";
                                 act.toast(msg);
+                                if (!r.errors.isEmpty()) showErrors(r.errors);
                                 act.homePage().refreshDisk();
                             }
                         });
@@ -94,6 +94,21 @@ public abstract class PageBase {
                 }).start();
             }
         });
+    }
+
+    /** 展示删除失败清单，说明原因与可行做法 */
+    protected void showErrors(List<String> errors) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("以下项目未能删除：\n\n");
+        int n = Math.min(errors.size(), 30);
+        for (int i = 0; i < n; i++) sb.append("· ").append(errors.get(i)).append('\n');
+        if (errors.size() > n) sb.append("\n… 共 ").append(errors.size()).append(" 项");
+        sb.append("\n\n常见原因：\n");
+        sb.append("· Android/data 与 obb 在 Android 11+ 受系统限制，需 root\n");
+        sb.append("· 文件正被其他应用占用\n");
+        sb.append("· 位于只读分区或缺少写权限");
+        if (!Shell.hasRoot()) sb.append("\n\n授予 root 后可解除大部分限制。");
+        UI.info(act, "删除失败 " + errors.size() + " 项", sb.toString());
     }
 
     protected void rebuild(final List<JunkItem> pool, final LinearLayout box, final TextView sum) {
