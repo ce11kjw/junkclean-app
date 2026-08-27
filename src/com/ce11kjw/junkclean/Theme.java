@@ -69,12 +69,15 @@ public final class Theme {
                 c.getResources().getDisplayMetrics());
     }
 
+    /** 是否使用半透明卡片（有壁纸时开启，营造玻璃质感） */
+    public static boolean glass = false;
+
     public static GradientDrawable card(Context c, float radiusDp) {
         GradientDrawable g = new GradientDrawable();
         g.setShape(GradientDrawable.RECTANGLE);
         g.setCornerRadius(dp(c, radiusDp));
-        g.setColor(SURFACE);
-        g.setStroke(dp(c, 1), LINE);
+        g.setColor(glass ? alpha(SURFACE, 0xD2) : SURFACE);
+        g.setStroke(dp(c, 1), glass ? alpha(LINE2, 0xB4) : LINE);
         return g;
     }
 

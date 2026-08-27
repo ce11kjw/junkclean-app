@@ -16,7 +16,8 @@ public class SettingsPage {
 
     private final MainActivity act;
     private ScrollView scroll;
-    private EditText wlInput, rootInput;
+    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel;
+    private TextView bgState, aiState;
     private TextView rootInfo, statInfo;
     private StatsChartView chart;
     private final List<Button> themeChips = new ArrayList<Button>();
@@ -33,6 +34,8 @@ public class SettingsPage {
 
         root.addView(envCard());
         root.addView(themeCard(), UI.lpm(act, UI.MP, UI.WC, 12));
+        root.addView(wallpaperCard(), UI.lpm(act, UI.MP, UI.WC, 12));
+        root.addView(aiCard(), UI.lpm(act, UI.MP, UI.WC, 12));
         root.addView(behaviorCard(), UI.lpm(act, UI.MP, UI.WC, 12));
         root.addView(catCard(), UI.lpm(act, UI.MP, UI.WC, 12));
         root.addView(whitelistCard(), UI.lpm(act, UI.MP, UI.WC, 12));
@@ -116,6 +119,137 @@ public class SettingsPage {
         }
         c.addView(aRow, UI.lpm(act, UI.MP, UI.WC, 8));
         return c;
+    }
+
+    // ---------- 壁纸 ----------
+
+    private View wallpaperCard() {
+        LinearLayout c = UI.card(act);
+        c.addView(UI.title(act, "背景壁纸"));
+        c.addView(UI.note(act, "填图片直链，下载后作为界面背景；会自动降采样并叠加蒙版保证文字可读"));
+
+        bgInput = UI.input(act, "https://example.com/bg.jpg", act.store.bgUrl());
+        c.addView(bgInput, UI.lpm(act, UI.MP, Theme.dp(act, 40), 10));
+
+        bgState = UI.note(act, "");
+        c.addView(bgState, UI.lpm(act, UI.MP, UI.WC, 6));
+
+        LinearLayout ops = UI.row(act);
+        Button apply = UI.primary(act, "下载并应用");
+        Button clear = UI.secondary(act, "恢复纯色");
+        apply.setTextSize(12); clear.setTextSize(12);
+        apply.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { applyWallpaper(); }
+        });
+        clear.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Wallpaper.clear(act);
+                act.store.setBgUrl("");
+                bgInput.setText("");
+                act.toast("已恢复纯色背景");
+                act.applyWallpaperAndRebuild();
+            }
+        });
+        ops.addView(apply, UI.weight(1.3f, 40, act));
+        LinearLayout.LayoutParams m = UI.weight(1f, 40, act);
+        m.leftMargin = Theme.dp(act, 6);
+        ops.addView(clear, m);
+        c.addView(ops, UI.lpm(act, UI.MP, UI.WC, 8));
+        return c;
+    }
+
+    private void applyWallpaper() {
+        final String url = bgInput.getText().toString().trim();
+        if (url.isEmpty()) { act.toast("请填写图片直链"); return; }
+        bgState.setText("下载中…");
+        new Thread(new Runnable() {
+            public void run() {
+                final String err = Wallpaper.fetch(act, url);
+                act.runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (err != null) {
+                            bgState.setText("失败：" + err);
+                            act.toast("壁纸设置失败");
+                            return;
+                        }
+                        act.store.setBgUrl(url);
+                        bgState.setText("已应用");
+                        act.applyWallpaperAndRebuild();
+                        act.toast("壁纸已应用");
+                    }
+                });
+            }
+        }).start();
+    }
+
+    // ---------- AI ----------
+
+    private View aiCard() {
+        LinearLayout c = UI.card(act);
+        c.addView(UI.title(act, "AI 清理建议"));
+        c.addView(UI.note(act, "填 OpenAI 兼容接口，首页扫描后可让 AI 分析结果并给出建议"));
+
+        c.addView(UI.note(act, "API 端点（如 https://api.openai.com/v1）"),
+                UI.lpm(act, UI.MP, UI.WC, 10));
+        aiEndpoint = UI.input(act, "https://api.openai.com/v1", act.store.aiEndpoint());
+        c.addView(aiEndpoint, UI.lpm(act, UI.MP, Theme.dp(act, 40), 4));
+
+        c.addView(UI.note(act, "API Key"), UI.lpm(act, UI.MP, UI.WC, 8));
+        aiKey = UI.input(act, "sk-…", act.store.aiKey());
+        aiKey.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        c.addView(aiKey, UI.lpm(act, UI.MP, Theme.dp(act, 40), 4));
+
+        c.addView(UI.note(act, "模型（留空用 gpt-4o-mini）"), UI.lpm(act, UI.MP, UI.WC, 8));
+        aiModel = UI.input(act, "gpt-4o-mini", act.store.aiModel());
+        c.addView(aiModel, UI.lpm(act, UI.MP, Theme.dp(act, 40), 4));
+
+        aiState = UI.note(act, "");
+        c.addView(aiState, UI.lpm(act, UI.MP, UI.WC, 8));
+
+        LinearLayout ops = UI.row(act);
+        Button save = UI.primary(act, "保存");
+        Button test = UI.secondary(act, "测试连接");
+        save.setTextSize(12); test.setTextSize(12);
+        save.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                act.store.setAi(aiEndpoint.getText().toString().trim(),
+                        aiKey.getText().toString().trim(),
+                        aiModel.getText().toString().trim());
+                aiState.setText("已保存");
+                act.toast("AI 配置已保存");
+            }
+        });
+        test.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { testAi(); }
+        });
+        ops.addView(save, UI.weight(1f, 40, act));
+        LinearLayout.LayoutParams m = UI.weight(1f, 40, act);
+        m.leftMargin = Theme.dp(act, 6);
+        ops.addView(test, m);
+        c.addView(ops, UI.lpm(act, UI.MP, UI.WC, 8));
+        return c;
+    }
+
+    private void testAi() {
+        act.store.setAi(aiEndpoint.getText().toString().trim(),
+                aiKey.getText().toString().trim(),
+                aiModel.getText().toString().trim());
+        aiState.setText("请求中…");
+        new Thread(new Runnable() {
+            public void run() {
+                final String r = Ai.advise(act.store, "这是一次连通性测试，请回复「连接正常」四个字。");
+                act.runOnUiThread(new Runnable() {
+                    public void run() {
+                        if (r.startsWith("ERR:")) {
+                            aiState.setText("✗ " + r.substring(4));
+                        } else {
+                            aiState.setText("✓ " + (r.length() > 60 ? r.substring(0, 60) + "…" : r));
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     // ---------- 清理行为 ----------
@@ -371,5 +505,10 @@ public class SettingsPage {
         }
         if (wlInput != null) wlInput.setText(wl.toString());
         if (rootInput != null) rootInput.setText(s.scanRoot());
+        if (bgInput != null) bgInput.setText(s.bgUrl());
+        if (bgState != null) bgState.setText(Wallpaper.exists(act) ? "当前已启用壁纸" : "当前为纯色背景");
+        if (aiEndpoint != null) aiEndpoint.setText(s.aiEndpoint());
+        if (aiKey != null) aiKey.setText(s.aiKey());
+        if (aiModel != null) aiModel.setText(s.aiModel());
     }
 }

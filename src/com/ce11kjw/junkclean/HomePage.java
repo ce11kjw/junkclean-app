@@ -24,8 +24,8 @@ public class HomePage {
     private LinearLayout catBox, rankBox;
     private StorageBarView bar;
     private TextView diskText, rootBadge, statBadge, scanState, compareText;
-    private Button scanBtn, cleanBtn, allBtn;
-    private TextView rescanBtn;
+    private Button scanBtn, cleanBtn, allBtn, aiBtn;
+    private TextView rescanBtn, aiText;
     private List<JunkCategory> cats = new ArrayList<JunkCategory>();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private boolean scanning;
@@ -89,6 +89,33 @@ public class HomePage {
 
         catBox = UI.col(act);
         root.addView(catBox, UI.lpm(act, UI.MP, UI.WC, 8));
+
+        // AI 建议
+        LinearLayout aiCard = UI.card(act);
+        LinearLayout aiHead = UI.row(act);
+        aiHead.addView(UI.title(act, "🤖  AI 清理建议"));
+        aiBtn = UI.secondary(act, "分析");
+        aiBtn.setTextSize(11.5f);
+        LinearLayout.LayoutParams abp = UI.lp(Theme.dp(act, 64), Theme.dp(act, 30));
+        abp.leftMargin = Theme.dp(act, 8);
+        aiHead.addView(aiBtn, abp);
+        aiCard.addView(aiHead);
+        aiCard.addView(UI.note(act, "把扫描结果交给 AI 分析，给出该清哪些、留哪些的建议"));
+        aiText = UI.text(act, "", 12, Theme.MUTED);
+        aiText.setLineSpacing(0, 1.45f);
+        aiCard.addView(aiText, UI.lpm(act, UI.MP, UI.WC, 8));
+        LinearLayout aiOps = UI.row(act);
+        Button aiApply = UI.secondary(act, "采纳建议（按分类勾选）");
+        aiApply.setTextSize(11.5f);
+        aiApply.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { applyAiAdvice(); }
+        });
+        aiOps.addView(aiApply, UI.weight(1f, 38, act));
+        aiCard.addView(aiOps, UI.lpm(act, UI.MP, UI.WC, 8));
+        aiBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { askAi(); }
+        });
+        root.addView(aiCard, UI.lpm(act, UI.MP, UI.WC, 12));
 
         // 底部操作
         LinearLayout btns = UI.row(act);
@@ -415,6 +442,58 @@ public class HomePage {
         UI.confirm(act, "一键全清安全项",
                 "将清理 " + fn + " 项安全项目，约 " + Util.fmtSize(fs) + "\n（跳过所有「谨慎」分类）",
                 new Runnable() { public void run() { doClean(); } });
+    }
+
+    // ---------- AI ----------
+
+    private String lastAdvice = "";
+
+    private void askAi() {
+        if (!act.store.aiReady()) {
+            aiText.setText("尚未配置 AI，请到「设置 → AI 清理建议」填写端点与 Key。");
+            return;
+        }
+        if (cats.isEmpty()) { act.toast("请先扫描"); return; }
+        aiBtn.setEnabled(false);
+        aiText.setText("AI 分析中…");
+        new Thread(new Runnable() {
+            public void run() {
+                long total = 0, free = currentFree();
+                try {
+                    StatFs fs = new StatFs(Environment.getExternalStorageDirectory().getPath());
+                    total = fs.getBlockCountLong() * fs.getBlockSizeLong();
+                } catch (Exception ignored) {}
+                final String summary = Ai.summarize(cats, free, total);
+                final String r = Ai.advise(act.store, summary);
+                ui.post(new Runnable() {
+                    public void run() {
+                        aiBtn.setEnabled(true);
+                        if (r.startsWith("ERR:")) {
+                            aiText.setText("请求失败：" + r.substring(4));
+                            lastAdvice = "";
+                        } else {
+                            aiText.setText(r);
+                            lastAdvice = r;
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /** 按 AI 提到的分类名勾选对应分类，未提到的取消勾选 */
+    private void applyAiAdvice() {
+        if (lastAdvice.isEmpty()) { act.toast("请先让 AI 分析"); return; }
+        List<String> hit = Ai.matchCategories(lastAdvice, cats);
+        if (hit.isEmpty()) { act.toast("建议中未匹配到具体分类"); return; }
+        int n = 0;
+        for (JunkCategory c : cats) {
+            boolean on = hit.contains(c.id) && !c.careful;
+            for (JunkItem it : c.items) { it.checked = on; if (on) n++; }
+        }
+        renderCats();
+        updateCleanBtn();
+        act.toast("已按建议勾选 " + n + " 项（谨慎分类仍需手动确认）");
     }
 
     // ---------- 目录排行 ----------

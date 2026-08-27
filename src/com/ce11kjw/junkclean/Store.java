@@ -38,6 +38,21 @@ public class Store {
     public String accent() { return sp.getString("accent", "emerald"); }
     public void setAccent(String a) { sp.edit().putString("accent", a).apply(); }
 
+    // ---------- AI ----------
+    public String aiEndpoint() { return sp.getString("aiEndpoint", ""); }
+    public String aiKey() { return sp.getString("aiKey", ""); }
+    public String aiModel() { return sp.getString("aiModel", ""); }
+    public void setAi(String endpoint, String key, String model) {
+        sp.edit().putString("aiEndpoint", endpoint)
+                 .putString("aiKey", key)
+                 .putString("aiModel", model).apply();
+    }
+    public boolean aiReady() { return !aiEndpoint().trim().isEmpty(); }
+
+    // ---------- 壁纸 ----------
+    public String bgUrl() { return sp.getString("bgUrl", ""); }
+    public void setBgUrl(String u) { sp.edit().putString("bgUrl", u).apply(); }
+
     // ---------- 设置开关 ----------
     public boolean toTrash() { return sp.getBoolean("toTrash", true); }
     public void setToTrash(boolean b) { sp.edit().putBoolean("toTrash", b).apply(); }

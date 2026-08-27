@@ -18,7 +18,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "2.0.1";
+    public static final String VERSION = "2.1.0";
 
     private FrameLayout content;
     private final Button[] tabs = new Button[3];
@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         store = new Store(this);
         Theme.apply(store.theme(), store.accent());
+        Theme.glass = Wallpaper.exists(this);
         build();
         requestStorageIfNeeded();
         // 启动时按设置清理过期回收站项
@@ -62,7 +63,9 @@ public class MainActivity extends Activity {
         }
 
         LinearLayout root = UI.col(this);
-        root.setBackgroundColor(Theme.BG);
+        android.graphics.drawable.Drawable bg = Wallpaper.drawable(this);
+        if (bg != null) root.setBackground(bg);
+        else root.setBackgroundColor(Theme.BG);
         root.setFitsSystemWindows(true);
 
         content = new FrameLayout(this);
@@ -77,9 +80,19 @@ public class MainActivity extends Activity {
         switchTab(0);
     }
 
+    /** 壁纸变更后重建界面 */
+    void applyWallpaperAndRebuild() {
+        Wallpaper.invalidate();
+        Theme.glass = Wallpaper.exists(this);
+        build();
+        switchTab(2);
+    }
+
     /** 主题变更后重建界面 */
     void applyThemeAndRebuild() {
         Theme.apply(store.theme(), store.accent());
+        Theme.glass = Wallpaper.exists(this);
+        Wallpaper.invalidate();
         build();
         switchTab(2);
         toast("外观已更新");
@@ -87,7 +100,8 @@ public class MainActivity extends Activity {
 
     private LinearLayout buildTabBar() {
         LinearLayout bar = UI.row(this);
-        bar.setBackgroundColor(Theme.BG2);
+        bar.setBackgroundColor(Wallpaper.exists(this)
+                ? Theme.alpha(Theme.BG2, 0xC8) : Theme.BG2);
         int pv = Theme.dp(this, 6);
         bar.setPadding(Theme.dp(this, 10), pv, Theme.dp(this, 10), pv);
 
