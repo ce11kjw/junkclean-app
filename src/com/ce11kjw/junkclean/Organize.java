@@ -68,6 +68,9 @@ public class Organize {
     /** 干跑：只算出移动清单，不落盘 */
     public Result preview(Rule r) {
         Result res = new Result();
+        if (r.src == null || r.dst == null || r.src.isEmpty() || r.dst.isEmpty()) return res;
+        // 目标不能是源本身，也不能是源的父级（否则会把文件搬到自己上层反复移动）
+        if (r.src.equals(r.dst) || r.src.startsWith(r.dst + "/")) return res;
         File src = new File(r.src);
         if (!src.isDirectory()) return res;
         collect(src, r, res, 0);
@@ -140,7 +143,8 @@ public class Organize {
             if (name.startsWith(".")) continue;
             if (f.isDirectory()) {
                 // 不进入目标目录，避免自我搬运
-                if (f.getAbsolutePath().startsWith(r.dst)) continue;
+                String ap = f.getAbsolutePath();
+                if (ap.equals(r.dst) || ap.startsWith(r.dst + "/")) continue;
                 if (r.recursive) collect(f, r, res, depth + 1);
                 continue;
             }

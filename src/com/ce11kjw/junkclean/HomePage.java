@@ -380,8 +380,10 @@ public class HomePage {
                         compareText.setText("清理完成 · 可用空间 "
                                 + Util.fmtSize(freeBefore) + " → " + Util.fmtSize(after)
                                 + (delta > 0 ? "（+" + Util.fmtSize(delta) + "）" : ""));
-                        String msg = "已清理 " + r.count + " 项 · 释放 " + Util.fmtSize(r.freed);
-                        if (r.toTrash > 0) msg += " · " + r.toTrash + " 项入回收站";
+                        String msg = "已处理 " + r.count + " 项";
+                        if (r.freed > 0) msg += " · 释放 " + Util.fmtSize(r.freed);
+                        if (r.toTrash > 0) msg += " · " + r.toTrash + " 项入回收站（"
+                                + Util.fmtSize(r.trashed) + "，清空后才释放）";
                         if (!r.errors.isEmpty()) msg += " · " + r.errors.size() + " 项失败";
                         act.toast(msg);
                         catBox.removeAllViews();

@@ -8,14 +8,19 @@ import java.util.List;
 public class CleanEngine {
 
     public static class Result {
-        public long freed;
+        public long freed;        // 真正释放的字节（删除）
+        public long trashed;      // 移入回收站的字节（空间未释放）
         public int count;
         public int toTrash;
         public List<String> errors = new ArrayList<String>();
+
+        /** 用于统计展示：入回收站的不计入释放量 */
+        public long realFreed() { return freed; }
     }
 
     private final boolean root;
     private final boolean useTrash;
+    private final List<Object[]> pendingRoot = new ArrayList<Object[]>();
 
     public CleanEngine(boolean useTrash) {
         this.root = Shell.hasRoot();
@@ -32,19 +37,19 @@ public class CleanEngine {
                 step(it.path, it.size, r, batch, c.needRoot);
             }
         }
-        flush(batch);
+        flush(batch, r);
         return r;
     }
 
     /** 清理任意路径列表 */
-    public Result clean(List<JunkItem> items, boolean allowTrash) {
+    public Result cleanItems(List<JunkItem> items) {
         Result r = new Result();
         StringBuilder batch = new StringBuilder();
         for (JunkItem it : items) {
             if (!it.checked) continue;
             step(it.path, it.size, r, batch, false);
         }
-        flush(batch);
+        flush(batch, r);
         return r;
     }
 
@@ -61,7 +66,7 @@ public class CleanEngine {
         if (useTrash && sdFile && !systemPath && !path.contains("/.junkclean_trash/")) {
             long moved = Trash.moveIn(f);
             if (moved > 0) {
-                r.freed += moved;
+                r.trashed += moved;
                 r.count++;
                 r.toTrash++;
                 return;
@@ -72,16 +77,33 @@ public class CleanEngine {
             r.freed += size;
             r.count++;
         } else if (root) {
+            // 攒批量 root 删除，flush 后统一校验，避免乐观计数
             batch.append("rm -rf ").append(Shell.quote(path)).append('\n');
-            r.freed += size;
-            r.count++;
+            pendingRoot.add(new Object[]{path, Long.valueOf(size)});
         } else {
             r.errors.add(Util.shortPath(path));
         }
     }
 
-    private void flush(StringBuilder batch) {
-        if (batch.length() > 0 && root) Shell.exec(true, batch.toString());
+    /** 执行 root 批量删除并校验结果，只有真正消失的才计入释放量 */
+    private void flush(StringBuilder batch, Result r) {
+        if (batch.length() == 0 || !root) {
+            for (Object[] p : pendingRoot) r.errors.add(Util.shortPath((String) p[0]));
+            pendingRoot.clear();
+            return;
+        }
+        Shell.exec(true, batch.toString());
+        for (Object[] p : pendingRoot) {
+            String path = (String) p[0];
+            long size = ((Long) p[1]).longValue();
+            if (new File(path).exists()) {
+                r.errors.add(Util.shortPath(path));
+            } else {
+                r.freed += size;
+                r.count++;
+            }
+        }
+        pendingRoot.clear();
     }
 
     /** 路径白名单：只允许 sdcard 与已知系统缓存目录，拒绝 .. */

@@ -120,7 +120,6 @@ public class ToolsPage {
             typeRow.addView(chip, lp);
             typeChips.add(chip);
         }
-        ScrollView typeScroll = new ScrollView(act);
         android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(act);
         hs.setHorizontalScrollBarEnabled(false);
         hs.addView(typeRow);
@@ -396,7 +395,7 @@ public class ToolsPage {
             public void run() {
                 new Thread(new Runnable() {
                     public void run() {
-                        final CleanEngine.Result r = new CleanEngine(act.store.toTrash()).clean(sel, true);
+                        final CleanEngine.Result r = new CleanEngine(act.store.toTrash()).cleanItems(sel);
                         ui.post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
@@ -736,7 +735,7 @@ public class ToolsPage {
             public void run() {
                 new Thread(new Runnable() {
                     public void run() {
-                        final CleanEngine.Result r = new CleanEngine(act.store.toTrash()).clean(sel, true);
+                        final CleanEngine.Result r = new CleanEngine(act.store.toTrash()).cleanItems(sel);
                         ui.post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
@@ -1324,7 +1323,7 @@ public class ToolsPage {
             public void run() {
                 new Thread(new Runnable() {
                     public void run() {
-                        final CleanEngine.Result r = new CleanEngine(toTrash).clean(sel, toTrash);
+                        final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
                         ui.post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
@@ -1343,7 +1342,8 @@ public class ToolsPage {
                                     updateSum(pool, sum);
                                 }
                                 String msg = (toTrash ? "已移入回收站 " : "已删除 ") + r.count
-                                        + " 项 · " + Util.fmtSize(r.freed);
+                                        + " 项 · " + Util.fmtSize(toTrash ? r.trashed : r.freed)
+                                        + (toTrash ? "（清空回收站后才真正释放）" : "");
                                 if (!r.errors.isEmpty()) msg += " · " + r.errors.size() + " 项失败";
                                 act.toast(msg);
                                 act.homePage().refreshDisk();

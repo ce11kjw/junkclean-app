@@ -50,7 +50,7 @@ public class ScanEngine {
                 {"log",      "日志文件",   "tombstone / anr / dropbox", "📄", "0", "1"},
                 {"temp",     "临时文件",   ".tmp / .part / .crdownload 等", "🗂", "0", "0"},
                 {"thumb",    "缩略图缓存", "相册与图库预览缓存", "🖼", "0", "0"},
-                {"apkjunk",  "冗余安装包", "已安装应用对应的 apk 文件", "📥", "0", "0"},
+                {"apkjunk",  "冗余安装包", "已安装应用对应的 apk 文件", "📥", "1", "0"},
                 {"emptyjunk","空文件",     "0 字节文件与空目录", "🫙", "0", "0"},
                 {"residue",  "应用残留",   "已卸载应用留下的数据目录", "🧹", "1", "0"},
         };
@@ -178,9 +178,9 @@ public class ScanEngine {
                 installed.add(a.packageName);
         } catch (Exception ignored) {}
 
+        // 只扫 data/obb（缓存与数据包）；Android/media 常存用户拍摄内容，不纳入自动清理
         for (String base : new String[]{Util.sdRoot() + "/Android/data",
-                                        Util.sdRoot() + "/Android/obb",
-                                        Util.sdRoot() + "/Android/media"}) {
+                                        Util.sdRoot() + "/Android/obb"}) {
             File[] dirs = new File(base).listFiles();
             if (dirs == null) continue;
             for (File d : dirs) {
@@ -198,6 +198,7 @@ public class ScanEngine {
 
     private void walkExt(File dir, int depth, int maxDepth, JunkCategory c, String[] exts) {
         if (depth > maxDepth || c.items.size() > 300) return;
+        if (dir.getName().equals(".junkclean_trash")) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {

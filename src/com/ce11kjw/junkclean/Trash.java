@@ -53,6 +53,7 @@ public class Trash {
         List<Item> out = new ArrayList<Item>();
         List<String> lines = Util.readLines(metaFile());
         long now = System.currentTimeMillis() / 1000;
+        boolean stale = false;
         for (String l : lines) {
             String[] p = l.split("\t");
             if (p.length < 4) continue;
@@ -61,7 +62,7 @@ public class Trash {
             it.orig = p[1];
             try { it.size = Long.parseLong(p[2]); } catch (Exception e) { it.size = 0; }
             try { it.time = Long.parseLong(p[3]); } catch (Exception e) { it.time = now; }
-            if (!new File(it.path).exists()) continue;
+            if (!new File(it.path).exists()) { stale = true; continue; }
             it.left = autoDays > 0
                     ? Math.max(0, autoDays - (int) ((now - it.time) / 86400))
                     : -1;
@@ -70,7 +71,18 @@ public class Trash {
         Collections.sort(out, new Comparator<Item>() {
             public int compare(Item a, Item b) { return Long.compare(b.time, a.time); }
         });
+        if (stale) rewriteMeta(out);   // 清掉指向已不存在文件的记录
         return out;
+    }
+
+    /** 用当前有效条目重写 meta，避免记录无限增长 */
+    private static void rewriteMeta(List<Item> items) {
+        StringBuilder sb = new StringBuilder();
+        for (Item it : items) {
+            sb.append(it.path).append('\t').append(it.orig).append('\t')
+              .append(it.size).append('\t').append(it.time).append('\n');
+        }
+        Util.write(metaFile(), sb.toString());
     }
 
     /** 恢复到原路径 */

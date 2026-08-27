@@ -62,6 +62,8 @@ public final class Finder {
             String n = f.getName();
             if (n.startsWith(".")) continue;
             if (f.isDirectory()) {
+                // 跳过 Android 目录：obb/data 是应用与游戏数据包，误删代价大
+                if (depth == 0 && n.equals("Android")) continue;
                 walk(f, depth + 1, maxDepth, out, cap, minBytes, before, wl);
                 continue;
             }
@@ -108,6 +110,7 @@ public final class Finder {
     private static void walkEmpty(File dir, int depth, List<JunkItem> out,
                                   boolean includeDirs, int cap) {
         if (depth > 9 || out.size() >= cap) return;
+        if (dir.getName().equals(".junkclean_trash")) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {
@@ -182,6 +185,7 @@ public final class Finder {
 
     private static void collectBySize(File dir, int depth, Map<Long, List<File>> map, long minSize) {
         if (depth > 8 || map.size() > 8000) return;
+        if (dir.getName().equals(".junkclean_trash")) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {
@@ -260,7 +264,7 @@ public final class Finder {
             a.path = f.path;
             a.label = f.name;
             a.size = f.size;
-            a.pkg = pkgOfApk(f.path);
+            a.pkg = pkgOfApk(ctx, f.path);
             a.installed = a.pkg != null && installed.contains(a.pkg);
             a.checked = a.installed;      // 已安装的默认勾选（可删）
             out.add(a);
@@ -273,6 +277,7 @@ public final class Finder {
 
     private static void walkApk(File dir, int depth, List<JunkItem> out) {
         if (depth > 8 || out.size() > 200) return;
+        if (dir.getName().equals(".junkclean_trash")) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {
@@ -285,15 +290,14 @@ public final class Finder {
         }
     }
 
-    /** 用 aapt/pm 读 apk 包名，失败返回 null */
-    private static String pkgOfApk(String path) {
-        String out = Shell.one(false, "aapt dump badging " + Shell.quote(path)
-                + " 2>/dev/null | grep -m1 \"^package:\"");
-        if (out.isEmpty()) return null;
-        int i = out.indexOf("name='");
-        if (i < 0) return null;
-        int j = out.indexOf('\'', i + 6);
-        return j < 0 ? null : out.substring(i + 6, j);
+    /** 用 PackageManager 读 apk 包名（纯 Java API，设备上无需 aapt） */
+    private static String pkgOfApk(Context ctx, String path) {
+        try {
+            android.content.pm.PackageInfo pi = ctx.getPackageManager()
+                    .getPackageArchiveInfo(path, 0);
+            if (pi != null && pi.packageName != null) return pi.packageName;
+        } catch (Exception ignored) {}
+        return null;
     }
 
     // ---------- 应用缓存排行 ----------
