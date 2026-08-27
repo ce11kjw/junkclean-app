@@ -17,8 +17,17 @@ $BT/aapt2 link -o $OUT/base.apk -I $PLATFORM \
     --manifest AndroidManifest.xml -R $OUT/res.zip --auto-add-overlay
 
 echo "[3/6] javac 编译..."
+set +e
 javac -source 8 -target 8 -bootclasspath $PLATFORM \
-    -d $OUT/classes $(find src -name "*.java") 2>&1 | grep -v "bootstrap class path" || true
+    -d $OUT/classes $(find src -name "*.java") 2>&1 \
+    | grep -v "bootstrap class path" | tee $OUT/javac.log
+JAVAC_FAIL=$(grep -cE "^[0-9]+ error" $OUT/javac.log)
+set -e
+if [ "$JAVAC_FAIL" != "0" ]; then
+    echo "❌ 编译失败，终止构建"
+    grep -E "error:" $OUT/javac.log | head -20
+    exit 1
+fi
 
 echo "[4/6] d8 dex..."
 $BT/d8 --lib $PLATFORM --release --output $OUT $(find $OUT/classes -name "*.class")

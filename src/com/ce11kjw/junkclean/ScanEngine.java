@@ -6,109 +6,118 @@ import android.content.pm.PackageManager;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
-/** 扫描引擎：5 大分类，有 root 走 root 路径，无 root 降级到公共目录 */
+/** 扫描引擎：8 分类，root 优先，无 root 降级；支持分类开关 + 缓存 */
 public class ScanEngine {
 
     public interface Progress {
-        void onCategory(String name);
-        void onDone(List<JunkCategory> cats);
+        void onCategory(String name, int index, int total);
     }
 
+    private static List<JunkCategory> cache;
+    private static long cacheTime;
+    private static final long CACHE_TTL = 60000;
+
     private final Context ctx;
+    private final Store store;
     private final Set<String> whitelist = new HashSet<String>();
     private final boolean root;
 
-    public ScanEngine(Context ctx, List<String> wl) {
+    public ScanEngine(Context ctx, Store store) {
         this.ctx = ctx;
+        this.store = store;
         this.root = Shell.hasRoot();
-        if (wl != null) whitelist.addAll(wl);
+        whitelist.addAll(store.whitelist());
     }
 
-    public boolean isRoot() { return root; }
+    public static void invalidate() { cache = null; }
 
-    public List<JunkCategory> scan(Progress cb) {
+    public static boolean hasCache() {
+        return cache != null && System.currentTimeMillis() - cacheTime < CACHE_TTL;
+    }
+
+    public List<JunkCategory> scan(boolean force, Progress cb) {
+        if (!force && hasCache()) return cache;
+
         List<JunkCategory> cats = new ArrayList<JunkCategory>();
+        String[][] defs = {
+                {"cache",    "应用缓存",   root ? "所有应用的 cache / code_cache" : "可访问的外部缓存", "📦", "0", "0"},
+                {"webview",  "WebView 缓存", "内置浏览器内核缓存", "🌐", "0", "0"},
+                {"log",      "日志文件",   "tombstone / anr / dropbox", "📄", "0", "1"},
+                {"temp",     "临时文件",   ".tmp / .part / .crdownload 等", "🗂", "0", "0"},
+                {"thumb",    "缩略图缓存", "相册与图库预览缓存", "🖼", "0", "0"},
+                {"apkjunk",  "冗余安装包", "已安装应用对应的 apk 文件", "📥", "0", "0"},
+                {"emptyjunk","空文件",     "0 字节文件与空目录", "🫙", "0", "0"},
+                {"residue",  "应用残留",   "已卸载应用留下的数据目录", "🧹", "1", "0"},
+        };
 
-        JunkCategory appCache = new JunkCategory("cache", "应用缓存",
-                root ? "所有应用的 cache 目录" : "本应用缓存（无 root 受限）", "📦", false, false);
-        if (cb != null) cb.onCategory(appCache.name);
-        scanAppCache(appCache);
-        cats.add(appCache);
+        int total = defs.length;
+        for (int i = 0; i < defs.length; i++) {
+            String[] d = defs[i];
+            if (!store.catEnabled(d[0])) continue;
+            JunkCategory c = new JunkCategory(d[0], d[1], d[2], d[3],
+                    "1".equals(d[4]), "1".equals(d[5]));
+            if (cb != null) cb.onCategory(c.name, i + 1, total);
+            if (c.needRoot && !root) { cats.add(c); continue; }
 
-        JunkCategory webview = new JunkCategory("webview", "WebView 缓存",
-                "内置浏览器内核缓存", "🌐", false, false);
-        if (cb != null) cb.onCategory(webview.name);
-        scanWebView(webview);
-        cats.add(webview);
+            if ("cache".equals(c.id))          scanAppCache(c);
+            else if ("webview".equals(c.id))   scanWebView(c);
+            else if ("log".equals(c.id))       scanLogs(c);
+            else if ("temp".equals(c.id))      scanTemp(c);
+            else if ("thumb".equals(c.id))     scanThumbs(c);
+            else if ("apkjunk".equals(c.id))   scanApkJunk(c);
+            else if ("emptyjunk".equals(c.id)) scanEmpty(c);
+            else if ("residue".equals(c.id))   scanResidue(c);
 
-        JunkCategory logs = new JunkCategory("log", "日志文件",
-                "崩溃日志 / tombstone / anr", "📄", false, true);
-        if (cb != null) cb.onCategory(logs.name);
-        scanLogs(logs);
-        cats.add(logs);
+            cats.add(c);
+        }
 
-        JunkCategory temp = new JunkCategory("temp", "临时文件",
-                "sdcard 上的 .tmp/.temp/.part 等", "🗂", false, false);
-        if (cb != null) cb.onCategory(temp.name);
-        scanTemp(temp);
-        cats.add(temp);
-
-        JunkCategory thumb = new JunkCategory("thumb", "缩略图缓存",
-                ".thumbnails / 相册预览缓存", "🖼", false, false);
-        if (cb != null) cb.onCategory(thumb.name);
-        scanThumbs(thumb);
-        cats.add(thumb);
-
-        JunkCategory residue = new JunkCategory("residue", "应用残留",
-                "已卸载应用留下的数据目录", "🧹", true, false);
-        if (cb != null) cb.onCategory(residue.name);
-        scanResidue(residue);
-        cats.add(residue);
-
-        if (cb != null) cb.onDone(cats);
+        cache = cats;
+        cacheTime = System.currentTimeMillis();
         return cats;
     }
 
-    // ---------- 各分类实现 ----------
+    private String scanRoot() {
+        String r = store.scanRoot();
+        return r == null || r.trim().isEmpty() ? Util.sdRoot() : r.trim();
+    }
+
+    // ---------- 分类实现 ----------
 
     private void scanAppCache(JunkCategory c) {
         if (root) {
-            // root：遍历 /data/data/*/cache
             List<String> out = Shell.exec(true,
                     "for d in /data/data/*/cache /data/data/*/code_cache; do " +
-                    "[ -d \"$d\" ] && echo \"$(du -sk \"$d\" 2>/dev/null | cut -f1) $d\"; done");
+                    "[ -d \"$d\" ] && echo \"$(du -sk \\\"$d\\\" 2>/dev/null | cut -f1)|$d\"; done");
             for (String l : out) {
-                String[] p = l.trim().split("\\s+", 2);
-                if (p.length != 2) continue;
+                int bar = l.indexOf('|');
+                if (bar <= 0) continue;
                 try {
-                    long kb = Long.parseLong(p[0]);
-                    if (kb <= 0) continue;
-                    String path = p[1];
+                    long kb = Long.parseLong(l.substring(0, bar).trim());
+                    if (kb <= 4) continue;
+                    String path = l.substring(bar + 1);
                     String pkg = pkgFromPath(path);
                     if (whitelist.contains(pkg)) continue;
                     c.items.add(new JunkItem(path, pkg + " / " + new File(path).getName(), kb * 1024));
                 } catch (NumberFormatException ignored) {}
             }
-        } else {
-            // 无 root：只能清自己 + Android/data 下可读的
-            File own = ctx.getCacheDir();
-            long s = Util.dirSize(own);
-            if (s > 0) c.items.add(new JunkItem(own.getAbsolutePath(), "JunkClean 自身缓存", s));
-            File extRoot = new File(Util.sdRoot() + "/Android/data");
-            File[] pkgs = extRoot.listFiles();
-            if (pkgs != null) {
-                for (File p : pkgs) {
-                    if (whitelist.contains(p.getName())) continue;
-                    File cache = new File(p, "cache");
-                    long sz = Util.dirSize(cache);
-                    if (sz > 0) c.items.add(new JunkItem(cache.getAbsolutePath(),
-                            p.getName() + " / cache", sz));
-                }
+        }
+        File own = ctx.getCacheDir();
+        long s = Util.dirSize(own);
+        if (s > 0) c.items.add(new JunkItem(own.getAbsolutePath(), "JunkClean 自身缓存", s));
+
+        File[] pkgs = new File(Util.sdRoot() + "/Android/data").listFiles();
+        if (pkgs != null) {
+            for (File p : pkgs) {
+                if (whitelist.contains(p.getName())) continue;
+                File cache = new File(p, "cache");
+                long sz = Util.dirSize(cache);
+                if (sz > 65536) c.items.add(new JunkItem(cache.getAbsolutePath(),
+                        p.getName() + " / 外部缓存", sz));
             }
         }
     }
@@ -126,89 +135,84 @@ public class ScanEngine {
             if (d.isEmpty()) continue;
             String pkg = pkgFromPath(d);
             if (whitelist.contains(pkg)) continue;
-            long s = root ? duKb(d) * 1024 : Util.dirSize(new File(d));
-            if (s > 0) c.items.add(new JunkItem(d, pkg + " / webview", s));
+            long s = root ? Shell.du(d) : Util.dirSize(new File(d));
+            if (s > 65536) c.items.add(new JunkItem(d, pkg + " / webview", s));
         }
     }
 
     private void scanLogs(JunkCategory c) {
-        if (!root) return;
-        String[] paths = {"/data/tombstones", "/data/anr", "/data/log",
-                "/data/system/dropbox", "/cache/recovery"};
-        for (String p : paths) {
-            long kb = duKb(p);
-            if (kb > 0) c.items.add(new JunkItem(p, p, kb * 1024));
+        for (String p : new String[]{"/data/tombstones", "/data/anr", "/data/log",
+                "/data/system/dropbox", "/cache/recovery", "/data/local/tmp"}) {
+            long s = Shell.du(p);
+            if (s > 4096) c.items.add(new JunkItem(p, p, s));
         }
     }
 
     private void scanTemp(JunkCategory c) {
-        String[] exts = {".tmp", ".temp", ".part", ".crdownload", ".download", ".log"};
-        walk(new File(Util.sdRoot()), 0, 6, c, exts, null);
+        String[] exts = {".tmp", ".temp", ".part", ".crdownload", ".download", ".log", ".bak", ".old"};
+        walkExt(new File(scanRoot()), 0, 7, c, exts);
     }
 
     private void scanThumbs(JunkCategory c) {
-        String sd = Util.sdRoot();
-        String[] dirs = {
-                sd + "/DCIM/.thumbnails", sd + "/Pictures/.thumbnails",
-                sd + "/.thumbnails", sd + "/Android/data/com.miui.gallery/cache",
-                sd + "/MIUI/Gallery/cloud/.cache", sd + "/tencent/MicroMsg/Cache"
-        };
-        for (String d : dirs) {
-            File f = new File(d);
-            if (!f.isDirectory()) continue;
-            long s = Util.dirSize(f);
-            if (s > 0) c.items.add(new JunkItem(d, d.replace(sd, "…"), s));
+        c.items.addAll(Finder.thumbs());
+    }
+
+    /** 冗余安装包：sdcard 上的 apk 且对应包已安装 */
+    private void scanApkJunk(JunkCategory c) {
+        for (Finder.ApkInfo a : Finder.apks(ctx, scanRoot())) {
+            if (!a.installed) continue;
+            if (whitelist.contains(a.label)) continue;
+            JunkItem it = new JunkItem(a.path, a.label + "（已安装）", a.size);
+            c.items.add(it);
         }
     }
 
+    private void scanEmpty(JunkCategory c) {
+        c.items.addAll(Finder.empties(scanRoot(), true, 150));
+    }
+
     private void scanResidue(JunkCategory c) {
-        PackageManager pm = ctx.getPackageManager();
         Set<String> installed = new HashSet<String>();
         try {
-            List<ApplicationInfo> apps = pm.getInstalledApplications(0);
-            for (ApplicationInfo a : apps) installed.add(a.packageName);
+            for (ApplicationInfo a : ctx.getPackageManager().getInstalledApplications(0))
+                installed.add(a.packageName);
         } catch (Exception ignored) {}
 
-        File extData = new File(Util.sdRoot() + "/Android/data");
-        File[] dirs = extData.listFiles();
-        if (dirs == null) return;
-        for (File d : dirs) {
-            String pkg = d.getName();
-            if (installed.contains(pkg) || whitelist.contains(pkg)) continue;
-            if (!pkg.contains(".")) continue;   // 不像包名的跳过
-            long s = Util.dirSize(d);
-            if (s > 0) c.items.add(new JunkItem(d.getAbsolutePath(), pkg + "（已卸载）", s));
+        for (String base : new String[]{Util.sdRoot() + "/Android/data",
+                                        Util.sdRoot() + "/Android/obb",
+                                        Util.sdRoot() + "/Android/media"}) {
+            File[] dirs = new File(base).listFiles();
+            if (dirs == null) continue;
+            for (File d : dirs) {
+                String pkg = d.getName();
+                if (installed.contains(pkg) || whitelist.contains(pkg)) continue;
+                if (!pkg.contains(".")) continue;
+                long s = Util.dirSize(d);
+                if (s > 0) c.items.add(new JunkItem(d.getAbsolutePath(),
+                        pkg + "（已卸载）", s));
+            }
         }
     }
 
     // ---------- 工具 ----------
 
-    private void walk(File dir, int depth, int maxDepth, JunkCategory c,
-                      String[] exts, String[] names) {
-        if (depth > maxDepth || dir == null) return;
+    private void walkExt(File dir, int depth, int maxDepth, JunkCategory c, String[] exts) {
+        if (depth > maxDepth || c.items.size() > 300) return;
         File[] fs = dir.listFiles();
         if (fs == null) return;
         for (File f : fs) {
             String n = f.getName();
-            if (n.equals("Android") || n.startsWith(".junkclean")) continue;
-            if (f.isDirectory()) {
-                walk(f, depth + 1, maxDepth, c, exts, names);
-                continue;
-            }
+            if (n.equals("Android") || n.startsWith(".")) continue;
+            if (f.isDirectory()) { walkExt(f, depth + 1, maxDepth, c, exts); continue; }
             if (whitelist.contains(n)) continue;
-            String low = n.toLowerCase(java.util.Locale.US);
-            boolean hit = false;
-            if (exts != null) for (String e : exts) if (low.endsWith(e)) { hit = true; break; }
-            if (!hit && names != null) for (String x : names) if (low.equals(x)) { hit = true; break; }
-            if (hit && f.length() > 0) {
-                c.items.add(new JunkItem(f.getAbsolutePath(), n, f.length()));
+            String low = n.toLowerCase(Locale.US);
+            for (String e : exts) {
+                if (low.endsWith(e) && f.length() > 0) {
+                    c.items.add(new JunkItem(f.getAbsolutePath(), n, f.length()));
+                    break;
+                }
             }
         }
-    }
-
-    private long duKb(String path) {
-        String s = Shell.one(root, "du -sk " + path + " 2>/dev/null | cut -f1");
-        try { return Long.parseLong(s.trim()); } catch (Exception e) { return 0; }
     }
 
     private String pkgFromPath(String path) {

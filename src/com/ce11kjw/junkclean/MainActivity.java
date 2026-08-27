@@ -14,10 +14,11 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
+
+    public static final String VERSION = "2.0.0";
 
     private FrameLayout content;
     private final Button[] tabs = new Button[3];
@@ -30,12 +31,35 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        store = new Store(this);
+        Theme.apply(store.theme(), store.accent());
+        build();
+        requestStorageIfNeeded();
+        // 启动时按设置清理过期回收站项
+        final int days = store.trashDays();
+        if (days > 0) {
+            new Thread(new Runnable() {
+                public void run() { Trash.autoClean(days); }
+            }).start();
+        }
+    }
+
+    /** 构建整个界面（主题切换时重建） */
+    private void build() {
         Window w = getWindow();
         w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         w.setStatusBarColor(Theme.BG);
         w.setNavigationBarColor(Theme.BG);
-
-        store = new Store(this);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            View dv = w.getDecorView();
+            int flags = dv.getSystemUiVisibility();
+            if (Theme.light) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            } else {
+                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            }
+            dv.setSystemUiVisibility(flags);
+        }
 
         LinearLayout root = UI.col(this);
         root.setBackgroundColor(Theme.BG);
@@ -44,15 +68,21 @@ public class MainActivity extends Activity {
         content = new FrameLayout(this);
         root.addView(content, new LinearLayout.LayoutParams(UI.MP, 0, 1f));
         root.addView(buildTabBar());
-
         setContentView(root);
 
         home = new HomePage(this);
         tools = new ToolsPage(this);
         settings = new SettingsPage(this);
-
+        current = -1;
         switchTab(0);
-        requestStorageIfNeeded();
+    }
+
+    /** 主题变更后重建界面 */
+    void applyThemeAndRebuild() {
+        Theme.apply(store.theme(), store.accent());
+        build();
+        switchTab(2);
+        toast("外观已更新");
     }
 
     private LinearLayout buildTabBar() {
@@ -87,17 +117,14 @@ public class MainActivity extends Activity {
         current = idx;
         for (int i = 0; i < 3; i++) UI.setChipActive(this, tabs[i], i == idx);
         content.removeAllViews();
-        View v;
-        if (idx == 0) v = home.view();
-        else if (idx == 1) v = tools.view();
-        else v = settings.view();
+        View v = idx == 0 ? home.view() : idx == 1 ? tools.view() : settings.view();
         content.addView(v, new FrameLayout.LayoutParams(UI.MP, UI.MP));
         if (idx == 2) settings.refresh();
+        if (idx == 0) { home.refreshDisk(); home.refreshStat(); }
+        v.scrollTo(0, 0);
     }
 
-    /** 有 root 时不必申请；无 root 需要全文件访问才能扫 sdcard */
     private void requestStorageIfNeeded() {
-        if (Shell.hasRoot()) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 toast("需要「所有文件访问权限」才能扫描存储");
@@ -121,4 +148,10 @@ public class MainActivity extends Activity {
     }
 
     HomePage homePage() { return home; }
+
+    @Override
+    public void onBackPressed() {
+        if (current != 0) { switchTab(0); return; }
+        super.onBackPressed();
+    }
 }

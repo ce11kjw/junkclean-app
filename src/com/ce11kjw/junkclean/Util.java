@@ -1,18 +1,37 @@
 package com.ce11kjw.junkclean;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.security.MessageDigest;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public final class Util {
     private Util() {}
 
-    /** 人类可读体积 */
     public static String fmtSize(long b) {
         if (b < 1024) return b + " B";
         double v = b;
         String[] u = {"KB", "MB", "GB", "TB"};
         int i = -1;
         while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
-        return String.format(java.util.Locale.US, "%.1f %s", v, u[i]);
+        return String.format(Locale.US, "%.1f %s", v, u[i]);
+    }
+
+    public static String fmtTime(long ms) {
+        if (ms <= 0) return "从未";
+        return new SimpleDateFormat("MM-dd HH:mm", Locale.US).format(new Date(ms));
+    }
+
+    public static String fmtDate(long ms) {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(ms));
     }
 
     /** 递归目录体积（不跟随符号链接） */
@@ -24,15 +43,13 @@ public final class Util {
         if (fs == null) return 0;
         for (File f : fs) {
             try {
-                if (f.getCanonicalPath().equals(f.getAbsolutePath())) {
-                    s += f.isDirectory() ? dirSize(f) : f.length();
-                }
-            } catch (Exception ignored) {}
+                if (!f.getCanonicalPath().equals(f.getAbsolutePath())) continue;
+            } catch (Exception e) { continue; }
+            s += f.isDirectory() ? dirSize(f) : f.length();
         }
         return s;
     }
 
-    /** 递归删除 */
     public static boolean rmrf(File f) {
         if (f == null || !f.exists()) return true;
         if (f.isDirectory()) {
@@ -42,11 +59,123 @@ public final class Util {
         return f.delete();
     }
 
-    /** sdcard 根目录 */
     public static String sdRoot() {
         for (String p : new String[]{"/storage/emulated/0", "/sdcard", "/mnt/sdcard"}) {
             if (new File(p).isDirectory()) return p;
         }
         return "/sdcard";
+    }
+
+    public static String shortPath(String p) {
+        String sd = sdRoot();
+        return p != null && p.startsWith(sd) ? "…" + p.substring(sd.length()) : p;
+    }
+
+    public static String ext(String name) {
+        int i = name.lastIndexOf('.');
+        return i < 0 ? "" : name.substring(i).toLowerCase(Locale.US);
+    }
+
+    /** 文件 MD5（大文件只取首尾 512KB + 大小，够用且快） */
+    public static String quickHash(File f) {
+        FileInputStream in = null;
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(String.valueOf(f.length()).getBytes());
+            in = new FileInputStream(f);
+            byte[] buf = new byte[524288];
+            int n = in.read(buf);
+            if (n > 0) md.update(buf, 0, n);
+            if (f.length() > 1048576L) {
+                in.skip(f.length() - 524288L - n);
+                n = in.read(buf);
+                if (n > 0) md.update(buf, 0, n);
+            }
+            StringBuilder sb = new StringBuilder();
+            for (byte b : md.digest()) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return f.getName() + ":" + f.length();
+        } finally {
+            try { if (in != null) in.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    // ---------- 文本读写 ----------
+
+    public static List<String> readLines(File f) {
+        List<String> out = new ArrayList<String>();
+        if (f == null || !f.exists()) return out;
+        BufferedReader r = null;
+        try {
+            r = new BufferedReader(new FileReader(f));
+            String l;
+            while ((l = r.readLine()) != null) if (!l.trim().isEmpty()) out.add(l);
+        } catch (Exception ignored) {
+        } finally {
+            try { if (r != null) r.close(); } catch (Exception ignored) {}
+        }
+        return out;
+    }
+
+    public static void write(File f, String s) {
+        FileWriter w = null;
+        try {
+            if (f.getParentFile() != null) f.getParentFile().mkdirs();
+            w = new FileWriter(f, false);
+            w.write(s);
+        } catch (Exception ignored) {
+        } finally {
+            try { if (w != null) w.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    public static void append(File f, String s) {
+        FileWriter w = null;
+        try {
+            if (f.getParentFile() != null) f.getParentFile().mkdirs();
+            w = new FileWriter(f, true);
+            w.write(s);
+        } catch (Exception ignored) {
+        } finally {
+            try { if (w != null) w.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    /** 移动文件（同分区 rename，跨分区复制） */
+    public static boolean move(File src, File dst) {
+        if (dst.getParentFile() != null) dst.getParentFile().mkdirs();
+        if (src.renameTo(dst)) return true;
+        FileInputStream in = null;
+        FileOutputStream out = null;
+        try {
+            in = new FileInputStream(src);
+            out = new FileOutputStream(dst);
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            out.close(); out = null;
+            in.close(); in = null;
+            return src.delete();
+        } catch (Exception e) {
+            return false;
+        } finally {
+            try { if (in != null) in.close(); } catch (Exception ignored) {}
+            try { if (out != null) out.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    /** 重名时追加序号 */
+    public static File uniqueName(File dst) {
+        if (!dst.exists()) return dst;
+        String name = dst.getName();
+        String base = name, e = "";
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) { base = name.substring(0, dot); e = name.substring(dot); }
+        for (int i = 1; i < 1000; i++) {
+            File f = new File(dst.getParentFile(), base + "_" + i + e);
+            if (!f.exists()) return f;
+        }
+        return dst;
     }
 }

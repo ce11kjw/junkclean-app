@@ -5,6 +5,7 @@ public class JunkItem {
     public String path;
     public String name;
     public long size;
+    public long mtime;
     public boolean checked = true;
 
     public JunkItem(String path, String name, long size) {
