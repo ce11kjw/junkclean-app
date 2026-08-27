@@ -10,8 +10,8 @@ import java.util.List;
 /** root/普通 shell 执行 + 能力探测（自动降级） */
 public final class Shell {
 
-    private static Boolean rootCache;
-    private static String manager = "";
+    private static volatile Boolean rootCache;
+    private static volatile String manager = "";
 
     private Shell() {}
 

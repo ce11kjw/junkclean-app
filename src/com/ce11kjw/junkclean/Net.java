@@ -49,7 +49,7 @@ public final class Net {
     }
 
     /** 最近一次 download 的失败原因，供 UI 展示 */
-    public static String lastError = "";
+    public static volatile String lastError = "";
 
     /** 下载二进制到字节数组，超出 maxBytes 视为失败 */
     public static byte[] download(String url, int timeoutMs, int maxBytes) {

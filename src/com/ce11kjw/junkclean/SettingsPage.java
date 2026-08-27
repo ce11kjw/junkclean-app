@@ -17,6 +17,7 @@ public class SettingsPage extends PageBase {
     private ScrollView scroll;
     private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel;
     private TextView rootInfo, bgState, aiState, updState, permState, aboutRuntime;
+    private LinearLayout aiBody;
 
     public SettingsPage(MainActivity a) { super(a); }
 
@@ -164,7 +165,7 @@ public class SettingsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final String err = Wallpaper.fetch(act, url);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         if (err != null) {
                             bgState.setText("失败：" + err);
@@ -183,45 +184,108 @@ public class SettingsPage extends PageBase {
 
     private View aiCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "OpenAI 兼容接口；首页扫描后可让 AI 分析并给建议"));
+        aiBody = UI.col(act);
+        c.addView(aiBody);
+        buildAiBody();
+        return c;
+    }
 
-        c.addView(UI.note(act, "API 端点"), UI.lpm(act, UI.MP, UI.WC, 8));
+    /** 未配置时展示完整表单；配置好后折叠端点与 Key，只留模型可改 */
+    private void buildAiBody() {
+        aiBody.removeAllViews();
+        boolean done = act.store.aiConfigured();
+
+        if (done) {
+            aiBody.addView(UI.note(act, "已配置 OpenAI 兼容接口，可在首页使用 AI 建议"));
+
+            LinearLayout info = UI.row(act);
+            info.addView(UI.badge(act, "端点已保存", Theme.ACCENT, Theme.alpha(Theme.ACCENT, 0x22)));
+            LinearLayout.LayoutParams bp = UI.lp(UI.WC, UI.WC);
+            bp.leftMargin = Theme.dp(act, 6);
+            info.addView(UI.badge(act, "密钥已保存", Theme.ACCENT, Theme.alpha(Theme.ACCENT, 0x22)), bp);
+            aiBody.addView(info, UI.lpm(act, UI.MP, UI.WC, 8));
+
+            aiBody.addView(UI.note(act, "模型 ID"), UI.lpm(act, UI.MP, UI.WC, 10));
+            aiModel = UI.input(act, "gpt-4o-mini", act.store.aiModel());
+            aiBody.addView(aiModel, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
+
+            aiState = UI.note(act, "");
+            aiBody.addView(aiState, UI.lpm(act, UI.MP, UI.WC, 8));
+
+            Button saveModel = UI.primary(act, "保存模型");
+            Button test = UI.secondary(act, "测试");
+            Button edit = UI.secondary(act, "修改接口");
+            saveModel.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    if (aiModel == null) return;
+                    act.store.setAi(act.store.aiEndpoint(), act.store.aiKey(),
+                            aiModel.getText().toString().trim());
+                    aiState.setText("模型已保存");
+                    act.toast("模型已保存");
+                }
+            });
+            test.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { testAi(); }
+            });
+            edit.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    act.store.setAiConfigured(false);
+                    buildAiBody();
+                }
+            });
+            aiBody.addView(UI.btnRow(act, UI.BTN_H, saveModel, test, edit),
+                    UI.lpm(act, UI.MP, UI.WC, 6));
+            return;
+        }
+
+        aiBody.addView(UI.note(act, "填写 OpenAI 兼容接口，保存后端点与密钥会自动隐藏"));
+
+        aiBody.addView(UI.note(act, "API 端点"), UI.lpm(act, UI.MP, UI.WC, 10));
         aiEndpoint = UI.input(act, "https://api.openai.com/v1", act.store.aiEndpoint());
-        c.addView(aiEndpoint, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
+        aiBody.addView(aiEndpoint, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
 
-        c.addView(UI.note(act, "API Key"), UI.lpm(act, UI.MP, UI.WC, 6));
+        aiBody.addView(UI.note(act, "API Key"), UI.lpm(act, UI.MP, UI.WC, 6));
         aiKey = UI.input(act, "sk-…", act.store.aiKey());
         aiKey.setInputType(android.text.InputType.TYPE_CLASS_TEXT
                 | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        c.addView(aiKey, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
+        aiBody.addView(aiKey, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
 
-        c.addView(UI.note(act, "模型（留空用 gpt-4o-mini）"), UI.lpm(act, UI.MP, UI.WC, 6));
+        aiBody.addView(UI.note(act, "模型 ID（留空用 gpt-4o-mini）"), UI.lpm(act, UI.MP, UI.WC, 6));
         aiModel = UI.input(act, "gpt-4o-mini", act.store.aiModel());
-        c.addView(aiModel, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
+        aiBody.addView(aiModel, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
 
         aiState = UI.note(act, "");
-        c.addView(aiState, UI.lpm(act, UI.MP, UI.WC, 8));
+        aiBody.addView(aiState, UI.lpm(act, UI.MP, UI.WC, 8));
 
         Button save = UI.primary(act, "保存");
         Button test = UI.secondary(act, "测试连接");
         save.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                if (aiEndpoint == null) return;
+                String ep = aiEndpoint.getText().toString().trim();
+                if (ep.isEmpty()) { act.toast("请填写 API 端点"); return; }
+                if (!ep.startsWith("http://") && !ep.startsWith("https://")) {
+                    act.toast("端点必须以 http(s):// 开头");
+                    return;
+                }
                 saveAi();
-                aiState.setText("已保存");
-                act.toast("AI 配置已保存");
+                act.store.setAiConfigured(true);
+                act.toast("已保存，端点与密钥已隐藏");
+                buildAiBody();
             }
         });
         test.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { testAi(); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, save, test), UI.lpm(act, UI.MP, UI.WC, 6));
-        return c;
+        aiBody.addView(UI.btnRow(act, UI.BTN_H, save, test), UI.lpm(act, UI.MP, UI.WC, 6));
     }
 
     private void saveAi() {
-        act.store.setAi(aiEndpoint.getText().toString().trim(),
-                aiKey.getText().toString().trim(),
-                aiModel.getText().toString().trim());
+        String ep = aiEndpoint != null ? aiEndpoint.getText().toString().trim()
+                                       : act.store.aiEndpoint();
+        String key = aiKey != null ? aiKey.getText().toString().trim() : act.store.aiKey();
+        String model = aiModel != null ? aiModel.getText().toString().trim() : act.store.aiModel();
+        act.store.setAi(ep, key, model);
     }
 
     private void testAi() {
@@ -230,7 +294,7 @@ public class SettingsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final String r = Ai.advise(act.store, "这是连通性测试，请回复「连接正常」。");
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         aiState.setText(r.startsWith("ERR:") ? "✗ " + r.substring(4)
                                 : "✓ " + (r.length() > 60 ? r.substring(0, 60) + "…" : r));
@@ -482,7 +546,7 @@ public class SettingsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final Updater.Info info = Updater.check(act.store);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         if (info.error != null) {
                             updState.setText("检查失败：" + info.error);
@@ -524,7 +588,7 @@ public class SettingsPage extends PageBase {
             public void run() {
                 final java.io.File f = Updater.download(act, info.apkUrl, new Net.Progress() {
                     public void onProgress(final int done, final int total) {
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 msg.setText(Util.fmtSize(done) + " / " + Util.fmtSize(total));
                                 bar.setPercent(total > 0 ? done * 100f / total : 0);
@@ -532,7 +596,7 @@ public class SettingsPage extends PageBase {
                         });
                     }
                 });
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         d.dismiss();
                         if (f == null) {
@@ -653,7 +717,7 @@ public class SettingsPage extends PageBase {
     // ---------- 刷新 ----------
 
     public void refresh() {
-        if (rootInfo == null) return;
+        if (rootInfo == null) return;   // 视图尚未构建
         Store s = act.store;
         boolean root = Shell.hasRoot();
         rootInfo.setText((root ? "✓ 已获得 root（" + Shell.detectManager() + "）" : "⚠ 未检测到 root")
@@ -680,8 +744,6 @@ public class SettingsPage extends PageBase {
         if (rootInput != null) rootInput.setText(s.scanRoot());
         if (bgInput != null) bgInput.setText(s.bgUrl());
         if (bgState != null) bgState.setText(Wallpaper.exists(act) ? "当前已启用壁纸" : "当前为纯色背景");
-        if (aiEndpoint != null) aiEndpoint.setText(s.aiEndpoint());
-        if (aiKey != null) aiKey.setText(s.aiKey());
-        if (aiModel != null) aiModel.setText(s.aiModel());
+        // AI 表单由 buildAiBody 自行填充，这里不覆盖，避免折叠态下空指针
     }
 }

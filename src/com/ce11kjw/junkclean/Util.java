@@ -34,27 +34,46 @@ public final class Util {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(ms));
     }
 
-    /** 递归目录体积（不跟随符号链接） */
+    /** 递归目录体积（不跟随符号链接，限制深度防止栈溢出） */
     public static long dirSize(File d) {
-        if (d == null || !d.exists()) return 0;
+        return dirSize(d, 0);
+    }
+
+    private static final int MAX_DEPTH = 24;
+
+    private static long dirSize(File d, int depth) {
+        if (d == null || depth > MAX_DEPTH || !d.exists()) return 0;
         if (d.isFile()) return d.length();
         long s = 0;
         File[] fs = d.listFiles();
         if (fs == null) return 0;
         for (File f : fs) {
             try {
+                // canonicalPath 不等于 absolutePath 说明是符号链接，跳过避免成环
                 if (!f.getCanonicalPath().equals(f.getAbsolutePath())) continue;
             } catch (Exception e) { continue; }
-            s += f.isDirectory() ? dirSize(f) : f.length();
+            s += f.isDirectory() ? dirSize(f, depth + 1) : f.length();
         }
         return s;
     }
 
     public static boolean rmrf(File f) {
+        return rmrf(f, 0);
+    }
+
+    private static boolean rmrf(File f, int depth) {
         if (f == null || !f.exists()) return true;
+        if (depth > MAX_DEPTH) return false;
         if (f.isDirectory()) {
-            File[] fs = f.listFiles();
-            if (fs != null) for (File c : fs) rmrf(c);
+            // 符号链接目录直接删链接本身，不进入
+            boolean symlink = false;
+            try {
+                symlink = !f.getCanonicalPath().equals(f.getAbsolutePath());
+            } catch (Exception ignored) {}
+            if (!symlink) {
+                File[] fs = f.listFiles();
+                if (fs != null) for (File c : fs) rmrf(c, depth + 1);
+            }
         }
         return f.delete();
     }
@@ -87,7 +106,13 @@ public final class Util {
             int n = in.read(buf);
             if (n > 0) md.update(buf, 0, n);
             if (f.length() > 1048576L) {
-                in.skip(f.length() - 524288L - n);
+                // InputStream.skip 不保证一次跳够，需循环
+                long need = f.length() - 524288L - n;
+                while (need > 0) {
+                    long skipped = in.skip(need);
+                    if (skipped <= 0) break;
+                    need -= skipped;
+                }
                 n = in.read(buf);
                 if (n > 0) md.update(buf, 0, n);
             }

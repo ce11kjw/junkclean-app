@@ -75,6 +75,28 @@ public class Store {
     public String accent() { return sp.getString("accent", "emerald"); }
     public void setAccent(String a) { sp.edit().putString("accent", a).apply(); }
 
+    // ---------- 重复文件保留策略 ----------
+    public String keepPolicy() { return sp.getString("keepPolicy", "newest"); }
+    public void setKeepPolicy(String p) { sp.edit().putString("keepPolicy", p).apply(); }
+
+    // ---------- 目录排行缓存（重启后仍可见） ----------
+    /** 每行：path\tsize */
+    public List<String> rankCache() { return split(sp.getString("rankCache", "")); }
+    public long rankTime() { return sp.getLong("rankTime", 0); }
+    public void setRankCache(List<String> lines) {
+        StringBuilder b = new StringBuilder();
+        for (String l : lines) { if (b.length() > 0) b.append('\n'); b.append(l); }
+        sp.edit().putString("rankCache", b.toString())
+                 .putLong("rankTime", System.currentTimeMillis()).apply();
+    }
+    public void clearRankCache() {
+        sp.edit().remove("rankCache").remove("rankTime").apply();
+    }
+
+    /** 排行统计深度：1=仅一级，2=两级 */
+    public int rankDepth() { return sp.getInt("rankDepth", 2); }
+    public void setRankDepth(int d) { sp.edit().putInt("rankDepth", d).apply(); }
+
     // ---------- AI ----------
     public String aiEndpoint() { return sp.getString("aiEndpoint", ""); }
     public String aiKey() { return sp.getString("aiKey", ""); }
@@ -85,6 +107,13 @@ public class Store {
                  .putString("aiModel", model).apply();
     }
     public boolean aiReady() { return !aiEndpoint().trim().isEmpty(); }
+
+    /** 端点与 Key 是否已配置好（用于折叠输入框，只留模型可改） */
+    public boolean aiConfigured() {
+        return sp.getBoolean("aiConfigured", false)
+                && !aiEndpoint().trim().isEmpty();
+    }
+    public void setAiConfigured(boolean b) { sp.edit().putBoolean("aiConfigured", b).apply(); }
 
     // ---------- 壁纸 ----------
     public String bgUrl() { return sp.getString("bgUrl", ""); }

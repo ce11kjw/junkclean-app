@@ -40,8 +40,11 @@ public class Trash {
         File dst = new File(dir(), stamp);
         boolean ok = src.renameTo(dst);
         if (!ok) {
-            // 跨分区，退化为复制 + 删除
+            // 跨分区只能复制。先确认剩余空间足够，否则可能把存储写满
+            long free = dir().getUsableSpace();
+            if (size > 0 && free < size + (32L << 20)) return 0;
             ok = copy(src, dst) && Util.rmrf(src);
+            if (!ok) Util.rmrf(dst);   // 复制到一半失败，清掉残留
         }
         if (!ok) return 0;
         appendMeta(dst.getAbsolutePath(), src.getAbsolutePath(), size);

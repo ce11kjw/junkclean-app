@@ -76,6 +76,8 @@ public class Organize {
         if (r.src == null || r.dst == null || r.src.isEmpty() || r.dst.isEmpty()) return res;
         // 目标不能是源本身，也不能是源的父级（否则会把文件搬到自己上层反复移动）
         if (r.src.equals(r.dst) || r.src.startsWith(r.dst + "/")) return res;
+        // 目标是源的子目录是允许的（如 Download → Download/整理），
+        // collect() 里会跳过目标子树，避免已归档文件被反复搬运
         File src = new File(r.src);
         if (!src.isDirectory()) return res;
         collect(src, r, res, 0);

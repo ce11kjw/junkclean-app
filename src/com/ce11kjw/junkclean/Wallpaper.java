@@ -20,8 +20,8 @@ import java.io.FileOutputStream;
  */
 public final class Wallpaper {
 
-    private static Bitmap cached;
-    private static String cacheKey = "";
+    private static volatile Bitmap cached;
+    private static volatile String cacheKey = "";
 
     private Wallpaper() {}
 
@@ -63,8 +63,13 @@ public final class Wallpaper {
         invalidate();
     }
 
+    /**
+     * 只丢弃引用，不回收 bitmap。
+     * 之前这里直接 recycle()，但同一个 bitmap 可能仍被挂在存活 View 的
+     * BitmapDrawable 上，重建界面时会抛 "trying to use a recycled bitmap"。
+     * 交给 GC 回收是安全的做法。
+     */
     public static void invalidate() {
-        if (cached != null && !cached.isRecycled()) cached.recycle();
         cached = null;
         cacheKey = "";
     }
@@ -105,7 +110,7 @@ public final class Wallpaper {
             if (src == null) return null;
 
             Bitmap out = centerCrop(src, sw, sh);
-            if (out != src) src.recycle();
+            if (out != src && !src.isRecycled()) src.recycle();
 
             out = softBlur(out);          // 轻模糊，给玻璃卡片提供磨砂底
             overlay(out);                 // 蒙版，保证文字对比度
@@ -137,10 +142,13 @@ public final class Wallpaper {
         return out;
     }
 
-    /** 缩小再放大的廉价模糊，成本极低 */
+    /**
+     * 轻度模糊：缩到 1/4 再放大。之前用 1/10 导致画面几乎认不出内容，
+     * 1/4 既能柔化细节又保留构图，玻璃卡片后面仍有层次。
+     */
     private static Bitmap softBlur(Bitmap src) {
         int w = src.getWidth(), h = src.getHeight();
-        int tw = Math.max(1, w / 10), th = Math.max(1, h / 10);
+        int tw = Math.max(1, w / 4), th = Math.max(1, h / 4);
         Bitmap small = Bitmap.createScaledBitmap(src, tw, th, true);
         Bitmap blur = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(blur);
@@ -154,8 +162,8 @@ public final class Wallpaper {
     private static void overlay(Bitmap b) {
         Canvas cv = new Canvas(b);
         Paint p = new Paint();
-        p.setColor(Theme.light ? Color.argb(0x8C, 0xFF, 0xFF, 0xFF)
-                               : Color.argb(0xA6, 0x04, 0x04, 0x0A));
+        p.setColor(Theme.light ? Color.argb(0x74, 0xFF, 0xFF, 0xFF)
+                               : Color.argb(0x7A, 0x04, 0x04, 0x0A));
         cv.drawRect(0, 0, b.getWidth(), b.getHeight(), p);
     }
 }

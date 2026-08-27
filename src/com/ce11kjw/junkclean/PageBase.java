@@ -19,6 +19,21 @@ public abstract class PageBase {
 
     protected PageBase(MainActivity a) { this.act = a; }
 
+    /**
+     * 后台任务回调前的存活检查。主题或壁纸切换会重建整个界面，
+     * 此时旧页面的线程仍在跑，直接操作 View 会更新到已废弃的实例上。
+     */
+    protected boolean alive() {
+        return !act.isFinishing() && !act.isDestroyed();
+    }
+
+    /** 只在页面仍存活时切回主线程执行 */
+    protected void post(final Runnable r) {
+        ui.post(new Runnable() {
+            public void run() { if (alive()) r.run(); }
+        });
+    }
+
     public abstract View view();
 
     protected String scanRoot() {
@@ -76,7 +91,7 @@ public abstract class PageBase {
                 new Thread(new Runnable() {
                     public void run() {
                         final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
                                 ScanEngine.invalidate();

@@ -108,7 +108,7 @@ public class ToolsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<Finder.AppCache> found = Finder.appCaches(act, wl());
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() { appItems = found; renderApps(); }
                 });
             }
@@ -183,7 +183,7 @@ public class ToolsPage extends PageBase {
                         long freed = 0;
                         for (Finder.AppCache a : sel) freed += eng.cleanAppCache(a.pkg);
                         final long f = freed;
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.store.addStat(f, sel.size());
                                 ScanEngine.invalidate();
@@ -227,7 +227,7 @@ public class ToolsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<JunkItem> found = Finder.thumbs(wl());
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         thumbItems.clear();
                         thumbItems.addAll(found);
@@ -420,7 +420,7 @@ public class ToolsPage extends PageBase {
             public void run() {
                 Organize org = new Organize(act.store.extMap(), wl());
                 final Organize.Result res = org.preview(r);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         if (res.moves.isEmpty()) {
                             orgSum.setText("没有需要整理的文件"
@@ -454,7 +454,7 @@ public class ToolsPage extends PageBase {
                     public void run() {
                         Organize org = new Organize(act.store.extMap(), wl());
                         final Organize.Result res = org.run(r);
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 orgSum.setText("已整理 " + res.moves.size() + " 个文件 · "
                                         + Util.fmtSize(res.total));
@@ -492,7 +492,7 @@ public class ToolsPage extends PageBase {
                         new Thread(new Runnable() {
                             public void run() {
                                 final int n = Organize.undoAll();
-                                ui.post(new Runnable() {
+                                post(new Runnable() {
                                     public void run() {
                                         act.toast("已还原 " + n + " 个文件");
                                         orgSum.setText("已还原 " + n + " 个文件到原位");
@@ -546,7 +546,7 @@ public class ToolsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<Trash.Item> items = Trash.list(act.store.trashDays());
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() { trashItems = items; renderTrash(); }
                 });
             }
@@ -614,7 +614,7 @@ public class ToolsPage extends PageBase {
                 int n = 0;
                 for (Trash.Item it : sel) if (Trash.restore(it)) n++;
                 final int fn = n;
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         act.toast("已恢复 " + fn + " 项到原位");
                         loadTrash();
@@ -634,7 +634,7 @@ public class ToolsPage extends PageBase {
                         long freed = 0;
                         for (Trash.Item it : sel) freed += Trash.delete(it);
                         final long f = freed;
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.toast("已删除 · 释放 " + Util.fmtSize(f));
                                 loadTrash();
@@ -653,7 +653,7 @@ public class ToolsPage extends PageBase {
                 new Thread(new Runnable() {
                     public void run() {
                         final long f = Trash.empty();
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.toast("回收站已清空 · 释放 " + Util.fmtSize(f));
                                 loadTrash();
@@ -694,7 +694,7 @@ public class ToolsPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final String out = Shell.fstrim(mp);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() { trimResult.setText(out); }
                 });
             }

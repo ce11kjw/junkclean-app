@@ -197,14 +197,14 @@ public class HomePage extends PageBase {
             public void run() {
                 final List<JunkCategory> result = eng.scan(force, new ScanEngine.Progress() {
                     public void onCategory(final String name, final int i, final int n) {
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 scanState.setText("正在扫描 " + i + "/" + n + "：" + name);
                             }
                         });
                     }
                 });
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         cats = result;
                         scanning = false;
@@ -367,7 +367,7 @@ public class HomePage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final CleanEngine.Result r = new CleanEngine(act.store.toTrash()).clean(cats);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         act.store.addStat(r.freed, r.count);
                         ScanEngine.invalidate();
@@ -434,7 +434,7 @@ public class HomePage extends PageBase {
                 } catch (Exception ignored) {}
                 final String summary = Ai.summarize(cats, free, total);
                 final String r = Ai.advise(act.store, summary);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         aiBtn.setEnabled(true);
                         if (r.startsWith("ERR:")) {

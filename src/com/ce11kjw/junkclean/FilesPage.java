@@ -33,7 +33,7 @@ public class FilesPage extends PageBase {
     private LinearLayout dupList;
     private TextView dupSum, dupPolicyLabel;
     private List<Finder.DupGroup> dupGroups = new ArrayList<Finder.DupGroup>();
-    private String keepPolicy = "newest";
+    private String keepPolicy;
 
     // 空文件
     private LinearLayout emptyList;
@@ -53,7 +53,10 @@ public class FilesPage extends PageBase {
     private List<Browser.Entry> brItems = new ArrayList<Browser.Entry>();
     private boolean brDirSize = true;
 
-    public FilesPage(MainActivity a) { super(a); }
+    public FilesPage(MainActivity a) {
+        super(a);
+        keepPolicy = a.store.keepPolicy();
+    }
 
     @Override
     public View view() {
@@ -188,7 +191,7 @@ public class FilesPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<JunkItem> found = Finder.big(scanRoot(), min, bigDays, wl(), 300, act.store.fullScan());
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         bigItems.clear();
                         bigItems.addAll(found);
@@ -246,7 +249,7 @@ public class FilesPage extends PageBase {
         LinearLayout c = UI.card(act);
         c.addView(UI.note(act, "大小分桶 + 内容哈希精确比对，同组按策略保留一份"));
 
-        dupPolicyLabel = UI.note(act, "当前策略：保留最新");
+        dupPolicyLabel = UI.note(act, "当前策略：" + policyLabel(keepPolicy));
         c.addView(dupPolicyLabel, UI.lpm(act, UI.MP, UI.WC, 8));
 
         Button policy = UI.secondary(act, "保留策略");
@@ -270,6 +273,13 @@ public class FilesPage extends PageBase {
         return c;
     }
 
+    private String policyLabel(String key) {
+        if ("oldest".equals(key)) return "保留最旧";
+        if ("shortest".equals(key)) return "保留路径最短";
+        if ("largest".equals(key)) return "保留体积最大";
+        return "保留最新";
+    }
+
     private void pickPolicy() {
         final String[] labels = {"保留最新", "保留最旧", "保留路径最短", "保留体积最大"};
         final String[] keys = {"newest", "oldest", "shortest", "largest"};
@@ -278,6 +288,7 @@ public class FilesPage extends PageBase {
         UI.pick(act, "保留策略", labels, cur, new android.content.DialogInterface.OnClickListener() {
             public void onClick(android.content.DialogInterface d, int w) {
                 keepPolicy = keys[w];
+                act.store.setKeepPolicy(keepPolicy);   // 持久化，重开仍生效
                 dupPolicyLabel.setText("当前策略：" + labels[w]);
                 d.dismiss();
                 if (!dupGroups.isEmpty()) {
@@ -295,7 +306,7 @@ public class FilesPage extends PageBase {
             public void run() {
                 final List<Finder.DupGroup> gs = Finder.duplicates(scanRoot(), 65536, 40, wl(), act.store.fullScan());
                 Finder.applyKeepPolicy(gs, keepPolicy);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() { dupGroups = gs; renderDup(); }
                 });
             }
@@ -364,7 +375,7 @@ public class FilesPage extends PageBase {
                 new Thread(new Runnable() {
                     public void run() {
                         final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
                                 ScanEngine.invalidate();
@@ -418,7 +429,7 @@ public class FilesPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<JunkItem> found = Finder.empties(scanRoot(), emptyDirs, 250, wl(), act.store.fullScan());
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         emptyItems.clear();
                         emptyItems.addAll(found);
@@ -471,7 +482,7 @@ public class FilesPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<Finder.ApkInfo> found = Finder.apks(act, scanRoot(), wl(), act.store.fullScan());
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() { apkItems = found; renderApk(); }
                 });
             }
@@ -585,7 +596,7 @@ public class FilesPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final List<Browser.Entry> list = Browser.list(path, brDirSize);
-                ui.post(new Runnable() {
+                post(new Runnable() {
                     public void run() {
                         brItems = list;
                         renderBrowse();
@@ -695,7 +706,7 @@ public class FilesPage extends PageBase {
                 new Thread(new Runnable() {
                     public void run() {
                         final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
                                 ScanEngine.invalidate();
@@ -733,7 +744,7 @@ public class FilesPage extends PageBase {
                 new Thread(new Runnable() {
                     public void run() {
                         final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
-                        ui.post(new Runnable() {
+                        post(new Runnable() {
                             public void run() {
                                 act.store.addStat(r.freed, r.count);
                                 act.toast("已处理 " + r.count + " 个 · "

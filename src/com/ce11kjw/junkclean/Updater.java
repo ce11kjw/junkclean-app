@@ -86,7 +86,7 @@ public final class Updater {
     }
 
     /** 最近一次下载失败的原因 */
-    public static String lastError = "";
+    public static volatile String lastError = "";
 
     /** 下载 APK 到公共下载目录，返回文件；失败返回 null */
     public static File download(Context c, String url, Net.Progress cb) {
@@ -143,22 +143,18 @@ public final class Updater {
 
     /** 通过 MediaStore 反查已落盘文件的 content:// */
     private static Uri contentUri(Context c, File apk) {
+        android.database.Cursor cur = null;
         try {
-            android.database.Cursor cur = c.getContentResolver().query(
+            cur = c.getContentResolver().query(
                     android.provider.MediaStore.Files.getContentUri("external"),
                     new String[]{android.provider.MediaStore.Files.FileColumns._ID},
                     android.provider.MediaStore.Files.FileColumns.DATA + "=?",
                     new String[]{apk.getAbsolutePath()}, null);
-            if (cur != null) {
-                Uri u = null;
-                if (cur.moveToFirst()) {
-                    long id = cur.getLong(0);
-                    u = Uri.withAppendedPath(
-                            android.provider.MediaStore.Files.getContentUri("external"),
-                            String.valueOf(id));
-                }
-                cur.close();
-                if (u != null) return u;
+            if (cur != null && cur.moveToFirst()) {
+                long id = cur.getLong(0);
+                return Uri.withAppendedPath(
+                        android.provider.MediaStore.Files.getContentUri("external"),
+                        String.valueOf(id));
             }
             // 未收录则主动插入一条记录
             android.content.ContentValues v = new android.content.ContentValues();
@@ -169,6 +165,8 @@ public final class Updater {
                     android.provider.MediaStore.Files.getContentUri("external"), v);
         } catch (Throwable t) {
             return null;
+        } finally {
+            if (cur != null) try { cur.close(); } catch (Exception ignored) {}
         }
     }
 

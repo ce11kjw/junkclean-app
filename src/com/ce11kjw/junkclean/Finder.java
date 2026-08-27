@@ -119,37 +119,78 @@ public final class Finder {
 
     /** 一级子目录体积排行（找出谁占空间） */
     public static List<JunkItem> dirRank(String root, int top, List<String> wl) {
-        return dirRank(root, top, wl, false);
+        return dirRank(root, top, wl, false, 2);
     }
 
     public static List<JunkItem> dirRank(String root, int top, List<String> wl, boolean full) {
+        return dirRank(root, top, wl, full, 2);
+    }
+
+    /**
+     * 目录体积排行。depth=1 只列一级；depth=2 会把体积占比高的一级目录展开到二级，
+     * 这样能看到「Android/data 里具体是哪个应用大」而不是只有一个 Android 条目。
+     */
+    public static List<JunkItem> dirRank(String root, int top, List<String> wl,
+                                         boolean full, int depth) {
         List<JunkItem> out = new ArrayList<JunkItem>();
+
         if (full && Shell.hasRoot()) {
             for (String p : SYSTEM_ROOTS) {
-                File d = new File(p);
-                if (!d.isDirectory()) continue;
+                if (!new File(p).isDirectory()) continue;
                 long s = Shell.du(p);
-                if (s > 0) {
-                    JunkItem it = new JunkItem(p, p, s);
-                    it.checked = false;
-                    out.add(it);
-                }
+                if (s > 0) out.add(mk(p, p, s));
             }
         }
+
+        List<JunkItem> firstLevel = new ArrayList<JunkItem>();
         File[] fs = new File(root).listFiles();
-        if (fs == null) return sortBySize(out, top);
-        for (File f : fs) {
-            if (!f.isDirectory() || f.getName().startsWith(".")) continue;
-            if (inWhitelist(wl, f.getName())) continue;
-            long s = Util.dirSize(f);
-            if (s > 0) {
-                JunkItem it = new JunkItem(f.getAbsolutePath(), f.getName(), s);
-                it.checked = false;
-                out.add(it);
+        if (fs != null) {
+            for (File f : fs) {
+                if (!f.isDirectory() || f.getName().startsWith(".")) continue;
+                if (inWhitelist(wl, f.getName())) continue;
+                long s = Util.dirSize(f);
+                if (s > 0) firstLevel.add(mk(f.getAbsolutePath(), f.getName(), s));
             }
         }
+        Collections.sort(firstLevel, BY_SIZE);
+        out.addAll(firstLevel);
+
+        // 展开前几个大目录的下一级，帮助定位真正占空间的位置
+        if (depth >= 2) {
+            int expand = Math.min(6, firstLevel.size());
+            for (int i = 0; i < expand; i++) {
+                JunkItem parent = firstLevel.get(i);
+                File[] kids = new File(parent.path).listFiles();
+                if (kids == null) continue;
+                List<JunkItem> subs = new ArrayList<JunkItem>();
+                for (File k : kids) {
+                    if (!k.isDirectory() || k.getName().startsWith(".")) continue;
+                    if (inWhitelist(wl, k.getName())) continue;
+                    long s = Util.dirSize(k);
+                    // 只保留占父目录 8% 以上且大于 8MB 的子目录，避免列表被碎片淹没
+                    if (s > 8388608L && s * 100 / Math.max(1, parent.size) >= 8) {
+                        subs.add(mk(k.getAbsolutePath(),
+                                parent.name + " / " + k.getName(), s));
+                    }
+                }
+                Collections.sort(subs, BY_SIZE);
+                int take = Math.min(4, subs.size());
+                for (int j = 0; j < take; j++) out.add(subs.get(j));
+            }
+        }
+
         return sortBySize(out, top);
     }
+
+    private static JunkItem mk(String path, String name, long size) {
+        JunkItem it = new JunkItem(path, name, size);
+        it.checked = false;
+        return it;
+    }
+
+    private static final Comparator<JunkItem> BY_SIZE = new Comparator<JunkItem>() {
+        public int compare(JunkItem a, JunkItem b) { return Long.compare(b.size, a.size); }
+    };
 
     private static List<JunkItem> sortBySize(List<JunkItem> out, int top) {
         Collections.sort(out, new Comparator<JunkItem>() {
