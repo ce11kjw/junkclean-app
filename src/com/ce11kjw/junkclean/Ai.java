@@ -63,6 +63,28 @@ public final class Ai {
         return sb.toString();
     }
 
+    /**
+     * 让 AI 确认一组视觉相似文件是否真重复。
+     * 传文件名+大小+感知哈希距离，AI 判断「是否同一张照片/同一段视频」。
+     * 返回 true 表示 AI 认为它们重复，false 表示不同内容。
+     */
+    public static boolean verifyDupGroup(Store store, Finder.DupGroup g) {
+        String base = store.aiEndpoint().trim();
+        if (base.isEmpty()) return true;  // 没配 AI 就当相似即重复
+        String model = store.aiModel().trim();
+        if (model.isEmpty()) model = "gpt-4o-mini";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("判断以下文件是否视觉上是重复的（同一张照片/同一段视频）。\n\n");
+        sb.append("感知哈希距离（0=完全相同，越大越不同）：\n");
+        for (JunkItem it : g.files) {
+            sb.append("· ").append(it.name).append("  ").append(Util.fmtSize(it.size)).append('\n');
+        }
+        sb.append("\n如果它们是同一内容的重复文件，回复「重复」；如果只是构图相似但内容不同，回复「不重复」。");
+        String r = advise(store, sb.toString());
+        return !r.toLowerCase(java.util.Locale.US).contains("不重复");
+    }
+
     /** 解析 AI 回答中提到的分类名，用于「采纳建议」自动勾选 */
     public static List<String> matchCategories(String advice, List<JunkCategory> cats) {
         List<String> hit = new ArrayList<String>();

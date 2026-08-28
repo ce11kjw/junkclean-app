@@ -188,6 +188,14 @@ public class Store {
     public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
 
     // ---------- 定时清理：开关 + 间隔（分钟）+ 下次执行时间戳 ----------
+    /** 重复文件感知哈希阈值：0=关闭，1=严格，12=默认，24=宽松 */
+    public int visualThreshold() { return sp.getInt("visualThreshold", 12); }
+    public void setVisualThreshold(int v) { sp.edit().putInt("visualThreshold", v).apply(); }
+
+    /** 重复文件 AI 视觉判定：true 时把相似组送 AI 二次确认 */
+    public boolean aiDupCheck() { return sp.getBoolean("aiDupCheck", false); }
+    public void setAiDupCheck(boolean b) { sp.edit().putBoolean("aiDupCheck", b).apply(); }
+
     /** 玻璃感 0~1：0=实色，1=真玻璃 */
     public float glass() { return sp.getInt("glass", 30) / 100f; }
     public void setGlass(float v) { sp.edit().putInt("glass", (int)(v * 100)).apply(); }

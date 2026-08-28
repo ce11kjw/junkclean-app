@@ -280,6 +280,20 @@ public final class Finder {
         }
         return sortGroups(groups);
     }
+    /**
+     * 组合版：先 MD5 精确重复，再感知哈希找照片/视频相似（可选 AI 确认）。
+     * hashThreshold = 0 时关闭视觉相似；>0 时把距离 ≤ 阈值的媒体归为「可能重复」。
+     */
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl, int hashThreshold) {
+        List<DupGroup> groups = new ArrayList<DupGroup>();
+        groups.addAll(duplicates(root, minSize, maxGroups, wl, false));
+        if (hashThreshold > 0 && groups.size() < maxGroups) {
+            groups.addAll(visualDuplicates(root, wl, hashThreshold));
+        }
+        return groups;
+    }
+
 
     /** 并发计算一组文件的哈希并按哈希分桶 */
     private static void hashPool(List<File> files, final Map<String, List<File>> out) {
@@ -521,7 +535,7 @@ public final class Finder {
                 public void run() {
                     try {
                         gate.acquire();
-                        long h = PerceptualHash.aHash(f);
+                        long h = PerceptualHash.safeHash(f);
                         if (h != 0) hashes.put(f.getAbsolutePath(), h);
                     } catch (InterruptedException ignored) {
                     } finally {

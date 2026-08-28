@@ -296,7 +296,76 @@ public class FilesPage extends PageBase {
             public void onClick(View v) { delDup(); }
         });
         c.addView(UI.btnRow(act, UI.BTN_H, policy, scan, del), UI.lpm(act, UI.MP, UI.WC, 10));
+
+        // 视觉重复（照片/视频）+ AI 确认
+        c.addView(UI.switchRow(act, "AI 视觉确认",
+                "感知哈希找到照片/视频相似后，交给 AI 二次确认是否真重复",
+                act.store.aiDupCheck(),
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                act.store.setAiDupCheck(on);
+                if (on && !act.store.aiReady()) {
+                    act.toast("请先在设置配置 AI 端点");
+                }
+            }
+        }), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+
+        Button aiBtn = UI.secondary(act, "🤖  AI 确认相似组");
+        aiBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { aiVerifyDups(); }
+        });
+        c.addView(aiBtn, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
         return c;
+    }
+
+    /** 把「视觉相似」组交给 AI 二次确认，排除构图相似但内容不同的 */
+    private void aiVerifyDups() {
+        if (!act.store.aiReady()) {
+            act.toast("请先在设置 → AI 清理建议 配置端点");
+            return;
+        }
+        if (dupGroups.isEmpty()) { act.toast("请先扫描重复文件"); return; }
+
+        // 找感知哈希组（可能重复的）
+        final java.util.List<Finder.DupGroup> visual = new ArrayList<Finder.DupGroup>();
+        for (Finder.DupGroup g : dupGroups) {
+            // 组内第一项如果是图片/视频才送 AI
+            JunkItem first = g.files.get(0);
+            if (PerceptualHash.isImage(new File(first.path))
+                    || PerceptualHash.isVideo(new File(first.path))) {
+                visual.add(g);
+            }
+        }
+        if (visual.isEmpty()) {
+            act.toast("没有需要 AI 确认的图片/视频组");
+            return;
+        }
+
+        final android.app.Dialog dlg = (android.app.Dialog) UI.progress(
+                act, "AI 确认中", "正在让 AI 判断 " + visual.size() + " 组是否真重复")[0];
+        new Thread(new Runnable() {
+            public void run() {
+                final int[] removed = {0};
+                for (Finder.DupGroup g : visual) {
+                    boolean dup = Ai.verifyDupGroup(act.store, g);
+                    if (!dup) {
+                        dupGroups.remove(g);   // AI 说不是重复，剔除
+                        removed[0]++;
+                    }
+                }
+                post(new Runnable() {
+                    public void run() {
+                        dlg.dismiss();
+                        if (removed[0] > 0) {
+                            act.toast("AI 剔除了 " + removed[0] + " 组「构图相似但不同」");
+                            renderDup();
+                        } else {
+                            act.toast("AI 确认这些组都是重复的");
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     private String policyLabel(String key) {
@@ -330,7 +399,9 @@ public class FilesPage extends PageBase {
         dupSum.setText("扫描中（计算哈希，稍慢）…");
         new Thread(new Runnable() {
             public void run() {
-                final List<Finder.DupGroup> gs = Finder.duplicates(scanRoot(), 65536, 40, wl(), act.store.fullScan());
+                final int vThresh = act.store.visualThreshold();
+                final List<Finder.DupGroup> gs = Finder.duplicates(
+                        scanRoot(), 65536, 40, wl(), vThresh);
                 Finder.applyKeepPolicy(gs, keepPolicy);
                 post(new Runnable() {
                     public void run() { dupGroups = gs; renderDup(); }

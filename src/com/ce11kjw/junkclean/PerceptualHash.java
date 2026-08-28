@@ -24,6 +24,15 @@ public final class PerceptualHash {
     /** 汉明距离 ≤ 此值视为「同一组」。12/64 = 81% 相似度。 */
     public static final int DEFAULT_THRESHOLD = 12;
 
+    /** 视频抽帧失败/不支持的格式时直接跳过，避免崩溃 */
+    public static long safeHash(File f) {
+        try {
+            return aHash(f);
+        } catch (Throwable ignored) {
+            return 0L;   // 返回 0 表示「无法参与视觉比较」，调用方跳过
+        }
+    }
+
     /** aHash：均值比较 */
     public static long aHash(File f) {
         Bitmap bm = decode(f);
