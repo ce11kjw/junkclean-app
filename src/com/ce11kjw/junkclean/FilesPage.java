@@ -689,8 +689,66 @@ public class FilesPage extends PageBase {
         clearAll.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { act.store.clearCleanDirs(); renderSavedCleanDirs(); }
         });
-        c.addView(clearAll, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+        Button runNow = UI.primary(act, "立即清理");
+        runNow.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { runSavedDirsNow(); }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, clearAll, runNow), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
         return c;
+    }
+
+    /** 立即执行已保存目录的清理（不等待定时） */
+    private void runSavedDirsNow() {
+        final List<String> dirs = act.store.savedCleanDirs();
+        if (dirs.isEmpty()) { act.toast("没有已保存的目录"); return; }
+        act.toast("开始清理 " + dirs.size() + " 个目录…");
+        new Thread(new Runnable() {
+            public void run() {
+                long freed = 0;
+                int cnt = 0;
+                CleanEngine eng = new CleanEngine(false);
+                for (String line : dirs) {
+                    String[] parts = line.split("\\|", 2);
+                    String path = parts.length > 0 ? parts[0] : "";
+                    if (path.isEmpty()) continue;
+                    java.io.File dir = new java.io.File(path);
+                    if (!dir.exists()) continue;
+                    boolean delItself = parts.length > 1 && "1".equals(parts[1]);
+                    if (delItself) {
+                        // 删整个目录
+                        java.util.List<JunkItem> one = java.util.Collections.singletonList(
+                                new JunkItem(path, dir.getName(), 0));
+                        CleanEngine.Result r = eng.cleanItems(one);
+                        freed += r.freed;
+                        cnt += r.count;
+                        // 清掉已删除的条目
+                        act.store.removeCleanDir(dirs.indexOf(line));
+                    } else {
+                        // 只删内部文件
+                        java.io.File[] kids = dir.listFiles();
+                        if (kids != null) {
+                            java.util.List<JunkItem> items = new java.util.ArrayList<JunkItem>();
+                            for (java.io.File k : kids)
+                                items.add(new JunkItem(k.getAbsolutePath(), k.getName(), 0));
+                            CleanEngine.Result r = eng.cleanItems(items);
+                            freed += r.freed;
+                            cnt += r.count;
+                        }
+                    }
+                }
+                final long f = freed;
+                final int n = cnt;
+                post(new Runnable() {
+                    public void run() {
+                        renderSavedCleanDirs();
+                        act.store.addStat(f, n);
+                        ScanEngine.invalidate();
+                        act.toast("清理完成 · " + n + " 项 · " + Util.fmtSize(f));
+                        act.homePage().refreshDisk();
+                    }
+                });
+            }
+        }).start();
     }
 
     private void saveCleanDir() {
