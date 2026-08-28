@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
@@ -110,11 +109,11 @@ public final class Wallpaper {
             if (src == null) return null;
 
             Bitmap out = centerCrop(src, sw, sh);
-            if (out != src && !src.isRecycled()) src.recycle();
+            // 不 recycle：壁纸可能与界面生命周期不同步，回收早了会爆 "recycled bitmap"。
+            // 缓存由 invalidate() 通过 null 引用放弃，交给 GC 即可。
 
-            out = softBlur(out);          // 轻模糊，给玻璃卡片提供磨砂底
-            overlay(out);                 // 蒙版，保证文字对比度
-
+            // 不模糊不蒙版：保留壁纸原画质。用户主动装壁纸就是要看清楚的，
+            // 玻璃卡片的可读性由卡片自身的对比策略负责（见卡片方案）。
             cached = out;
             cacheKey = key;
             return out;
@@ -123,7 +122,7 @@ public final class Wallpaper {
         }
     }
 
-    /** 等比缩放后居中裁剪到目标尺寸，不变形 */
+    /** 等比缩放后居中裁剪到目标尺寸，不变形。原画质，无模糊。 */
     private static Bitmap centerCrop(Bitmap src, int dw, int dh) {
         int sw = src.getWidth(), sh = src.getHeight();
         if (sw == dw && sh == dh) return src;
@@ -138,32 +137,11 @@ public final class Wallpaper {
         int cw = Math.min(dw, nw), ch = Math.min(dh, nh);
 
         Bitmap out = Bitmap.createBitmap(scaled, x, y, cw, ch);
-        if (scaled != out) scaled.recycle();
+        // scaled 是中间产物，不挂任何 UI，裁剪完立刻回收
+        if (scaled != out && !scaled.isRecycled()) scaled.recycle();
+        // src 也不回收：见 invalidate() 注释
         return out;
     }
 
-    /**
-     * 轻度模糊：缩到 1/4 再放大。之前用 1/10 导致画面几乎认不出内容，
-     * 1/4 既能柔化细节又保留构图，玻璃卡片后面仍有层次。
-     */
-    private static Bitmap softBlur(Bitmap src) {
-        int w = src.getWidth(), h = src.getHeight();
-        int tw = Math.max(1, w / 4), th = Math.max(1, h / 4);
-        Bitmap small = Bitmap.createScaledBitmap(src, tw, th, true);
-        Bitmap blur = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas cv = new Canvas(blur);
-        Paint p = new Paint(Paint.FILTER_BITMAP_FLAG);
-        cv.drawBitmap(small, new Rect(0, 0, tw, th), new Rect(0, 0, w, h), p);
-        small.recycle();
-        src.recycle();
-        return blur;
-    }
 
-    private static void overlay(Bitmap b) {
-        Canvas cv = new Canvas(b);
-        Paint p = new Paint();
-        p.setColor(Theme.light ? Color.argb(0x74, 0xFF, 0xFF, 0xFF)
-                               : Color.argb(0x7A, 0x04, 0x04, 0x0A));
-        cv.drawRect(0, 0, b.getWidth(), b.getHeight(), p);
-    }
 }

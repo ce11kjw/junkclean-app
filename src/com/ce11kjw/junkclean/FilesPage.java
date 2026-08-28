@@ -641,19 +641,68 @@ public class FilesPage extends PageBase {
         return c;
     }
 
-    /** 保护路径清单：让用户看得见哪些目录不会被碰 */
+    /** 保护路径清单：可删除/恢复。删除后该目录会被扫描，可手动加入白名单。 */
     private void showProtected() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("以下 ").append(Store.PROTECTED.length)
-          .append(" 个目录始终受保护，不会被扫描或清理：\n\n");
-        for (String p : Store.PROTECTED) {
-            File f = new File(Util.sdRoot() + "/" + p);
-            sb.append(f.isDirectory() ? "● " : "○ ").append(p);
-            if (f.isDirectory()) sb.append("   ").append(Util.fmtSize(Util.dirSize(f)));
-            sb.append('\n');
+        final java.util.List<String> all = new java.util.ArrayList<String>();
+        for (String p : Store.PROTECTED) all.add(p);
+
+        Object[] parts = UI.glassDialog(act, "保护路径");
+        final android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        body.addView(UI.note(act, "点 × 移除某项保护。移除后该目录会被扫描到。\n长按可恢复出厂。"),
+                UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+
+        for (final String p : all) {
+            LinearLayout row = UI.row(act);
+            row.setBackground(Theme.item(act, false));
+            int pd = Theme.dp(act, 12);
+            row.setPadding(pd, Theme.dp(act, 8), pd, Theme.dp(act, 8));
+            LinearLayout.LayoutParams rp = UI.lp(UI.MP, UI.WC);
+            rp.topMargin = Theme.dp(act, 6);
+            TextView nm = UI.text(act, p, Theme.T_BODY,
+                    act.store.isRemovedFromProt(p) ? Theme.DIM : Theme.TEXT);
+            nm.setSingleLine(true);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            row.addView(nm, new LinearLayout.LayoutParams(0, UI.WC, 1f));
+            if (act.store.isRemovedFromProt(p)) {
+                TextView bd = UI.badge(act, "已移除", Theme.WARN,
+                        Theme.alpha(Theme.WARN, 0x22));
+                row.addView(bd);
+            }
+            TextView x = UI.text(act, "×", Theme.T_TITLE,
+                    act.store.isRemovedFromProt(p) ? Theme.ACCENT : Theme.MUTED);
+            x.setGravity(android.view.Gravity.CENTER);
+            x.setPadding(Theme.dp(act, 10), 0, Theme.dp(act, 10), 0);
+            x.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    if (act.store.isRemovedFromProt(p)) {
+                        act.store.removeFromProt(p);
+                    } else {
+                        // 二次确认
+                        UI.confirm(act, "移除保护", "确认让 JunkClean 扫描这个目录？\n\n"
+                                + p, new Runnable() {
+                            public void run() { act.store.removeFromProt(p); }
+                        });
+                    }
+                    // 刷新整个对话框
+                    d.dismiss();
+                    ScanEngine.invalidate();
+                    showProtected();
+                    act.toast("已" + (act.store.isRemovedFromProt(p) ? "移除" : "恢复") + "保护：" + p);
+                }
+            });
+            row.addView(x);
+            body.addView(row, rp);
         }
-        sb.append("\n● 本机存在   ○ 本机无此目录");
-        UI.info(act, "保护路径", sb.toString());
+
+        Button close = UI.primary(act, "关闭");
+        close.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); }
+        });
+        wrap.addView(UI.btnRow(act, UI.BTN_H, close), UI.lpm(act, UI.MP, UI.WC, Theme.S4));
+        d.show();
     }
 
     private void pickShortcut() {

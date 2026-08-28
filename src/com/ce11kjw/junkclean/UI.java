@@ -428,7 +428,7 @@ public final class UI {
 
     // ================= 玻璃对话框 =================
 
-    private static Object[] glassDialog(Context c, String title) {
+    public static Object[] glassDialog(Context c, String title) {
         final android.app.Dialog d = new android.app.Dialog(c);
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
 

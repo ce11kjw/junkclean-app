@@ -41,15 +41,46 @@ public class Store {
             ".ssh", ".gnupg", "keystore", "KeyStore", ".android",
             // 系统与工具配置
             "Android/obb", "MagiskManager", "KernelSU", "APatch", "TWRP",
-            "Fonts", "Download/IDM", "Termux",
+            "Fonts", "下载", "Termux",
             // 游戏存档
             "games", "Games", "gameData", "Unity", "com.miHoYo"
     };
 
     /** 用户白名单 + 内置保护路径 */
+    /** 用户从内置保护中删除的条目（持久化） */
+    public List<String> removedProt() { return split(sp.getString("removedProt", "")); }
+    public void removeFromProt(String name) {
+        List<String> r = removedProt();
+        if (!r.contains(name)) r.add(name);
+        sp.edit().putString("removedProt", joinForSet(r)).apply();
+    }
+    public void restoreToProt(String name) {
+        List<String> r = removedProt();
+        r.remove(name);
+        sp.edit().putString("removedProt", joinForSet(r)).apply();
+    }
+    public boolean isRemovedFromProt(String name) {
+        return removedProt().contains(name);
+    }
+
+    /** PROTECTED 减去被用户移除的 */
+    public java.util.List<String> effectiveProtected() {
+        java.util.List<String> r = new ArrayList<String>();
+        java.util.List<String> removed = removedProt();
+        for (String p : PROTECTED) if (!removed.contains(p)) r.add(p);
+        return r;
+    }
+
+    private String joinForSet(List<String> list) {
+        StringBuilder b = new StringBuilder();
+        for (String s : list) { if (b.length() > 0) b.append('\n'); b.append(s); }
+        return b.toString();
+    }
+
+    /** 用户白名单 + 内置保护（减去被用户移除的） */
     public List<String> whitelist() {
         List<String> out = split(sp.getString("whitelist", ""));
-        for (String p : PROTECTED) if (!out.contains(p)) out.add(p);
+        for (String p : effectiveProtected()) if (!out.contains(p)) out.add(p);
         return out;
     }
 
@@ -140,7 +171,7 @@ public class Store {
 
     // ---------- 整理中心：全局统一源目录 ----------
     public String orgSrc() {
-        return sp.getString("orgSrc", Util.sdRoot() + "/Download");
+        return sp.getString("orgSrc", Util.sdRoot() + "/下载");
     }
     public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
 
