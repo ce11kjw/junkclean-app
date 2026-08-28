@@ -163,6 +163,9 @@ public class StatsPage extends PageBase {
     public void refresh() {
         if (overview == null) return;
         Store s = act.store;
+        // 切到统计页时恢复上次排行结果（之前只在 view() 首次构造时恢复，
+        // 后续 refresh() 不会重载，导致重启后看不到结果）
+        if (s.rankCache().size() > 0) restoreRank();
         Anim.countSize(totalFreedText, 0, s.totalFreed());
         Anim.countInt(totalCountText, 0, s.totalCount(), " 项");
         overview.setText("上次清理  " + Util.fmtTime(s.lastClean()));

@@ -149,6 +149,9 @@ public final class UI {
         Button b = baseBtn(c, s);
         b.setTextColor(Theme.light ? 0xFF06231B : 0xFF04140F);
         b.setBackground(Theme.primaryBtn(c));
+        // 给按钮足够的水平 padding，让渐变填充和圆角都能完整呈现
+        int ph = Theme.dp(c, 14);
+        b.setPadding(ph, b.getPaddingTop(), ph, b.getPaddingBottom());
         return b;
     }
 
@@ -156,6 +159,7 @@ public final class UI {
         Button b = baseBtn(c, s);
         b.setTextColor(0xFFFFFFFF);
         b.setBackground(Theme.dangerBtn(c));
+        b.setPadding(Theme.dp(c, 14), b.getPaddingTop(), Theme.dp(c, 14), b.getPaddingBottom());
         return b;
     }
 
@@ -163,6 +167,7 @@ public final class UI {
         Button b = baseBtn(c, s);
         b.setTextColor(Theme.MUTED);
         b.setBackground(Theme.ghostBtn(c));
+        b.setPadding(Theme.dp(c, 14), b.getPaddingTop(), Theme.dp(c, 14), b.getPaddingBottom());
         return b;
     }
 
@@ -238,7 +243,8 @@ public final class UI {
             b.setTextColor(Theme.light ? 0xFF06231B : 0xFF04140F);
         } else {
             b.setBackground(Theme.ghostBtn(c));
-            b.setTextColor(Theme.MUTED);
+            // 玻璃模式下未选中文字用半透明，让玻璃质感贯穿
+            b.setTextColor(Theme.glass ? Theme.alpha(Theme.TEXT, 0xB4) : Theme.MUTED);
         }
     }
 

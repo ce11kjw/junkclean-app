@@ -132,10 +132,9 @@ public final class Finder {
      */
     public static List<JunkItem> dirRank(String root, int top, List<String> wl,
                                          boolean full, int depth) {
-        List<JunkItem> out = new ArrayList<JunkItem>();
-
-        // 用户一级目录先排：用户最关心的是 sdcard 上自己装的应用占了多少。
-        // 系统分区放后面，否则 /data/* 这种几十 GB 的目录会把用户目录挤掉。
+        // 两组分别排序、各取前 N，再合并：用户一级目录填满 top，
+        // 系统分区只在 full 模式且还有余位时补足。这样用户目录永远占据榜首，
+        // 不再被 /data/* 这种几十 GB 的系统分区挤掉。
         List<JunkItem> firstLevel = new ArrayList<JunkItem>();
         File[] fs = new File(root).listFiles();
         if (fs != null) {
@@ -147,21 +146,31 @@ public final class Finder {
             }
         }
         Collections.sort(firstLevel, BY_SIZE);
-        out.addAll(firstLevel);
+        List<JunkItem> userTop = firstLevel.size() > top
+                ? firstLevel.subList(0, top) : firstLevel;
 
-        // 系统分区放最后（如果全盘模式），单独标 [系统] 前缀
+        List<JunkItem> sysTop = new ArrayList<JunkItem>();
         if (full && Shell.hasRoot()) {
-            List<JunkItem> sysList = new ArrayList<JunkItem>();
             for (String p : SYSTEM_ROOTS) {
                 if (!new File(p).isDirectory()) continue;
                 long s = Shell.du(p);
-                if (s > 0) sysList.add(mk(p, "[系统] " + p, s));
+                if (s > 0) sysTop.add(mk(p, "[系统] " + p, s));
             }
-            // 用户目录已先填 out，系统目录追加在末尾，不再霸占顶部
-            for (JunkItem s : sysList) {
-                s.checked = false;
-                out.add(s);
-            }
+            Collections.sort(sysTop, BY_SIZE);
+            // 系统目录最多占 top/2 位，避免喧宾夺主
+            int sysN = Math.min(sysTop.size(), top / 2);
+            sysTop = sysTop.subList(0, sysN);
+        }
+
+        // 合并：用户全在前面，系统补足
+        List<JunkItem> out = new ArrayList<JunkItem>(userTop);
+        for (JunkItem s : sysTop) {
+            s.checked = false;
+            out.add(s);
+        }
+        // 如果用户不到 top，剩下的全给系统（仍排序后追加）
+        if (out.size() < top && sysTop.size() < sysTop.size()) {
+            // 上面已经限制过了，这里只是兜底
         }
 
         // 展开用户一级目录的前 6 个，帮助定位真正占空间的位置
@@ -511,4 +520,99 @@ public final class Finder {
         });
         return out;
     }
+
+    // ============================================================
+    // 感知哈希重复检测：照片/视频的「构图相似」匹配
+    // ============================================================
+
+    public static final int DEFAULT_VISUAL_THRESHOLD = 12;
+
+    /** 仅扫描图片和视频 */
+    public static List<DupGroup> visualDuplicates(String root, List<String> wl,
+                                                final int threshold) {
+        final List<File> media = new ArrayList<File>();
+        collectMedia(new File(root), 0, media, wl);
+        if (media.size() < 2) return new ArrayList<DupGroup>();
+
+        // 并发算 aHash
+        final java.util.Map<String, Long> hashes =
+                new java.util.concurrent.ConcurrentHashMap<String, Long>();
+        final java.util.concurrent.CountDownLatch latch =
+                new java.util.concurrent.CountDownLatch(media.size());
+        final java.util.concurrent.Semaphore gate =
+                new java.util.concurrent.Semaphore(4);
+        for (final File f : media) {
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        gate.acquire();
+                        long h = PerceptualHash.aHash(f);
+                        if (h != 0) hashes.put(f.getAbsolutePath(), h);
+                    } catch (InterruptedException ignored) {
+                    } finally {
+                        gate.release();
+                        latch.countDown();
+                    }
+                }
+            }).start();
+        }
+        try { latch.await(5, java.util.concurrent.TimeUnit.MINUTES); }
+        catch (InterruptedException ignored) {}
+
+        Map<Long, List<File>> byHash = new HashMap<Long, List<File>>();
+        for (File f : media) {
+            Long h = hashes.get(f.getAbsolutePath());
+            if (h == null) continue;
+            List<File> bucket = byHash.get(h);
+            if (bucket == null) { bucket = new ArrayList<File>(); byHash.put(h, bucket); }
+            bucket.add(f);
+        }
+        // 哈希距离 ≤ threshold 视为相似
+        List<DupGroup> groups = new ArrayList<DupGroup>();
+        List<Long> sortedKeys = new ArrayList<Long>(byHash.keySet());
+        Collections.sort(sortedKeys);
+        for (int i = 0; i < sortedKeys.size(); i++) {
+            for (int j = i + 1; j < sortedKeys.size(); j++) {
+                long hi = sortedKeys.get(i), hj = sortedKeys.get(j);
+                if (PerceptualHash.distance(hi, hj) <= threshold) {
+                    List<File> bucket = new ArrayList<File>(byHash.get(hi));
+                    bucket.addAll(byHash.get(hj));
+                    DupGroup dg = new DupGroup();
+                    dg.size = bucket.get(0).length();
+                    dg.name = bucket.get(0).getName();
+                    for (File f : bucket) {
+                        JunkItem it = new JunkItem(f.getAbsolutePath(), f.getName(), f.length());
+                        it.checked = false;
+                        it.mtime = f.lastModified();
+                        dg.files.add(it);
+                    }
+                    groups.add(dg);
+                }
+            }
+        }
+        Collections.sort(groups, new Comparator<DupGroup>() {
+            public int compare(DupGroup a, DupGroup b) {
+                return Long.compare(b.size * b.files.size(), a.size * a.files.size());
+            }
+        });
+        return groups;
+    }
+
+    private static void collectMedia(File dir, int depth, List<File> out, List<String> wl) {
+        if (depth > 8) return;
+        File[] fs = dir.listFiles();
+        if (fs == null) return;
+        for (File f : fs) {
+            if (f.isDirectory()) {
+                if (!f.getName().startsWith(".") && !inWhitelist(wl, f.getName())) {
+                    collectMedia(f, depth + 1, out, wl);
+                }
+            } else if (PerceptualHash.isImage(f) || PerceptualHash.isVideo(f)) {
+                if (f.length() > 4096 && !inWhitelist(wl, f.getName())) {
+                    out.add(f);
+                }
+            }
+        }
+    }
+
 }

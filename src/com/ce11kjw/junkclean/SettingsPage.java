@@ -600,14 +600,7 @@ public class SettingsPage extends PageBase {
                             return;
                         }
                         updState.setText("发现新版本 v" + info.version);
-                        String notes = info.notes;
-                        if (notes.length() > 800) notes = notes.substring(0, 800) + "…";
-                        UI.confirm(act, "发现新版本 v" + info.version,
-                                (notes.isEmpty() ? "" : notes + "\n\n")
-                                + "点击「确定」立即下载并安装。",
-                                new Runnable() {
-                            public void run() { doUpdate(info); }
-                        });
+                        showUpdateDialog(info);
                     }
                 });
             }
@@ -664,7 +657,145 @@ public class SettingsPage extends PageBase {
         }).start();
     }
 
-    // ---------- 关于 ----------
+
+    /**
+     * 新版本对话框：三个按钮，下载按钮点了才走流量。
+     */
+    private void showUpdateDialog(final Updater.Info info) {
+        Object[] parts = UI.glassDialog(act, "发现新版本 v" + info.version);
+        final android.app.Dialog d = (android.app.Dialog) parts[0];
+        LinearLayout body = (LinearLayout) parts[1];
+        LinearLayout wrap = (LinearLayout) parts[2];
+
+        if (info.notes != null && !info.notes.isEmpty()) {
+            String notes = info.notes;
+            if (notes.length() > 1200) notes = notes.substring(0, 1200) + "…";
+            TextView m = UI.data(act, notes, Theme.T_DATA_S, Theme.MUTED);
+            m.setLineSpacing(0, 1.4f);
+            android.widget.ScrollView sv = new android.widget.ScrollView(act);
+            sv.setVerticalScrollBarEnabled(false);
+            sv.addView(m);
+            int maxH = (int) (act.getResources().getDisplayMetrics().heightPixels * 0.4f);
+            body.addView(sv, new LinearLayout.LayoutParams(UI.MP, maxH));
+        }
+        if (info.apkUrl != null && !info.apkUrl.isEmpty()) {
+            TextView url = UI.data(act, info.apkUrl, Theme.T_DATA_S, Theme.DIM);
+            url.setPadding(0, Theme.dp(act, Theme.S3), 0, 0);
+            url.setSingleLine(true);
+            url.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            body.addView(url, UI.lpm(act, UI.MP, UI.WC, 0));
+        }
+
+        Button download = UI.primary(act, "下载并安装");
+        Button copyUrl = UI.secondary(act, "复制下载链接");
+        Button later = UI.secondary(act, "稍后再说");
+        download.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); doUpdate(info); }
+        });
+        copyUrl.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (info.apkUrl == null || info.apkUrl.isEmpty()) { return; }
+                android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                        act.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText(
+                        "JunkClean update", info.apkUrl));
+                act.toast("下载链接已复制");
+            }
+        });
+        later.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { d.dismiss(); }
+        });
+        wrap.addView(UI.btnRow(act, UI.BTN_H, later, copyUrl), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        wrap.addView(download, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H_MAIN), Theme.S3));
+        d.show();
+    }
+
+    // ---------- 定时清理 ----------
+
+    private View scheduleCard() {
+        LinearLayout c = UI.card(act);
+        c.addView(UI.eyebrow(act, "定时清理"));
+        c.addView(UI.title(act, "自动清理间隔"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "到点自动扫描并清理（不影响手动操作），重启手机后自动恢复"),
+                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+
+        // 总开关
+        c.addView(UI.switchRow(act, "启用定时清理", "默认每 30 分钟一次，启动不立即跑",
+                act.store.scheduleEnabled(),
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                act.store.setScheduleEnabled(on);
+                ScheduleManager.apply(act, act.store);
+            }
+        }));
+
+        // 间隔选择
+        c.addView(UI.eyebrow(act, "间隔"), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        final int[] opts = {15, 30, 60, 120, 240};
+        final String[] labels = {"15 分钟", "30 分钟", "1 小时", "2 小时", "4 小时"};
+        LinearLayout row = UI.row(act);
+        int cur = 0;
+        for (int i = 0; i < opts.length; i++) if (opts[i] == act.store.scheduleIntervalMin()) cur = i;
+        for (int i = 0; i < opts.length; i++) {
+            final int idx = i;
+            Button b = UI.chip(act, labels[i], i == cur);
+            b.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    act.store.setScheduleIntervalMin(opts[idx]);
+                    ScheduleManager.apply(act, act.store);
+                }
+            });
+            LinearLayout.LayoutParams lp = UI.lp(UI.WC, Theme.dp(act, 26));
+            lp.rightMargin = Theme.dp(act, Theme.S1);
+            row.addView(b, lp);
+        }
+        c.addView(row);
+
+        // 条件
+        c.addView(UI.eyebrow(act, "触发条件"), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        c.addView(UI.switchRow(act, "仅在充电时", "避免低电量时跑", act.store.scheduleOnlyCharging(),
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                act.store.setScheduleOnlyCharging(on);
+            }
+        }));
+        c.addView(UI.switchRow(act, "仅在 Wi-Fi 时", "避免移动数据流量", act.store.scheduleOnlyWifi(),
+                new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                act.store.setScheduleOnlyWifi(on);
+            }
+        }));
+
+        // 下次时间 + 立即跑一次
+        c.addView(UI.eyebrow(act, "状态"), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        TextView next = UI.data(act, nextScheduleText(), Theme.T_DATA_S, Theme.MUTED);
+        c.addView(next, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+
+        Button runNow = UI.secondary(act, "立即跑一次");
+        runNow.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                act.toast("已触发清理");
+                CleanReceiver.runOnce(act);
+            }
+        });
+        c.addView(runNow, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+        return c;
+    }
+
+    private String nextScheduleText() {
+        if (!act.store.scheduleEnabled()) return "未启用";
+        long next = act.store.scheduleNextAt();
+        if (next <= 0) return "已调度";
+        long delta = (next - System.currentTimeMillis()) / 60_000;
+        if (delta < 0) return "即将执行（< 1 分钟）";
+        return "下次：" + delta + " 分钟后";
+    }
+
+    /**
+     * AndroidManifest 里也注册这两个 receiver（在 v3.0.6 通过 patch 加）
+     */
+
+        // ---------- 关于 ----------
 
     private View aboutCard() {
         LinearLayout c = UI.card(act);

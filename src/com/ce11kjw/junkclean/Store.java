@@ -187,6 +187,25 @@ public class Store {
     }
     public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
 
+    // ---------- 定时清理：开关 + 间隔（分钟）+ 下次执行时间戳 ----------
+    public boolean scheduleEnabled() { return sp.getBoolean("scheduleEnabled", false); }
+    public void setScheduleEnabled(boolean b) { sp.edit().putBoolean("scheduleEnabled", b).apply(); }
+
+    public int scheduleIntervalMin() { return sp.getInt("scheduleIntervalMin", 30); }
+    public void setScheduleIntervalMin(int m) {
+        int v = Math.max(15, Math.min(720, m));
+        sp.edit().putInt("scheduleIntervalMin", v).apply();
+    }
+
+    public long scheduleNextAt() { return sp.getLong("scheduleNextAt", 0); }
+    public void setScheduleNextAt(long t) { sp.edit().putLong("scheduleNextAt", t).apply(); }
+
+    public boolean scheduleOnlyCharging() { return sp.getBoolean("scheduleOnlyCharging", false); }
+    public void setScheduleOnlyCharging(boolean b) { sp.edit().putBoolean("scheduleOnlyCharging", b).apply(); }
+
+    public boolean scheduleOnlyWifi() { return sp.getBoolean("scheduleOnlyWifi", false); }
+    public void setScheduleOnlyWifi(boolean b) { sp.edit().putBoolean("scheduleOnlyWifi", b).apply(); }
+
     // ---------- 远程更新 ----------
     public String updateUrl() {
         return sp.getString("updateUrl",

@@ -21,7 +21,7 @@ public class FilesPage extends PageBase {
     private ScrollView scroll;
 
     // 大文件
-    private EditText bigMin, bigSearch, apkSearch, brSearch;
+    private EditText bigMin, bigSearch, brSearch;
     private LinearLayout bigList;
     private TextView bigSum;
     private final List<JunkItem> bigItems = new ArrayList<JunkItem>();
@@ -42,9 +42,6 @@ public class FilesPage extends PageBase {
     private boolean emptyDirs = true;
 
     // 安装包
-    private LinearLayout apkList;
-    private TextView apkSum;
-    private List<Finder.ApkInfo> apkItems = new ArrayList<Finder.ApkInfo>();
 
     // 文件清理（目录浏览）
     private LinearLayout brList;
@@ -78,8 +75,6 @@ public class FilesPage extends PageBase {
         root.addView(dupCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "空文件与空目录"));
         root.addView(emptyCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
-        root.addView(UI.section(act, "安装包"));
-        root.addView(apkCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "文件清理"));
         root.addView(browseCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.spacer(act, Theme.S8));
@@ -479,106 +474,11 @@ public class FilesPage extends PageBase {
         }).start();
     }
 
-    // ---------- 安装包 ----------
 
-    private View apkCard() {
-        LinearLayout c = UI.card(act);
-        c.addView(UI.eyebrow(act, "安装包"));
-        c.addView(UI.title(act, "APK 管理"), UI.lpm(act, UI.MP, UI.WC, 2));
-        c.addView(UI.note(act, "标注是否已安装，已安装的 apk 可安全删除"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
-        Button scan = UI.primary(act, "扫描");
-        Button selIns = UI.secondary(act, "只选已安装");
-        scan.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { scanApk(); }
-        });
-        selIns.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                for (Finder.ApkInfo a : apkItems) a.checked = a.installed;
-                renderApk();
-            }
-        });
-        apkSearch = UI.search(act, "按名称过滤");
-        apkSearch.addTextChangedListener(new android.text.TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            public void afterTextChanged(android.text.Editable e) { renderApk(); }
-        });
-        c.addView(apkSearch, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
 
-        apkSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
-        c.addView(apkSum, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
-        apkList = UI.col(act);
-        c.addView(apkList, UI.lpm(act, UI.MP, UI.WC, 4));
 
-        Button del = UI.danger(act, "删除选中");
-        del.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { delApk(); }
-        });
-        c.addView(UI.btnRow(act, UI.BTN_H, scan, selIns, del), UI.lpm(act, UI.MP, UI.WC, 10));
-        return c;
-    }
 
-    private void scanApk() {
-        apkList.removeAllViews();
-        apkSum.setText("扫描中…");
-        new Thread(new Runnable() {
-            public void run() {
-                final List<Finder.ApkInfo> found = Finder.apks(act, scanRoot(), wl(), act.store.fullScan());
-                post(new Runnable() {
-                    public void run() { apkItems = found; renderApk(); }
-                });
-            }
-        }).start();
-    }
-
-    private void renderApk() {
-        apkList.removeAllViews();
-        if (apkItems.isEmpty()) {
-            apkSum.setText("");
-            apkList.addView(UI.empty(act, "未发现安装包"));
-            return;
-        }
-        String kw = apkSearch == null ? ""
-                : apkSearch.getText().toString().trim().toLowerCase(java.util.Locale.US);
-        List<Finder.ApkInfo> show = new ArrayList<Finder.ApkInfo>();
-        for (Finder.ApkInfo a : apkItems) {
-            if (!kw.isEmpty() && !a.label.toLowerCase(java.util.Locale.US).contains(kw)) continue;
-            show.add(a);
-        }
-        long total = 0, insTotal = 0;
-        int ins = 0;
-        for (Finder.ApkInfo a : show) {
-            total += a.size;
-            if (a.installed) { ins++; insTotal += a.size; }
-        }
-        apkSum.setText(show.size() + " 个   " + Util.fmtSize(total)
-                + "   已装 " + ins + " 个 / " + Util.fmtSize(insTotal) + " 可回收");
-
-        for (final Finder.ApkInfo a : show) {
-            LinearLayout r = UI.row(act);
-            r.setPadding(0, Theme.dp(act, 5), 0, Theme.dp(act, 5));
-            CheckBox cb = UI.check(act, a.checked);
-            cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
-                public void onCheckedChanged(android.widget.CompoundButton v, boolean on) { a.checked = on; }
-            });
-            r.addView(cb);
-            TextView nm = UI.text(act, a.label, 12, Theme.MUTED);
-            nm.setSingleLine(true);
-            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
-            LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, UI.WC, 1f);
-            np.leftMargin = Theme.dp(act, 4);
-            r.addView(nm, np);
-            if (a.installed) r.addView(UI.badge(act, "已装", Theme.ACCENT, Theme.alpha(Theme.ACCENT, 0x22)));
-            else if (a.pkg == null) r.addView(UI.badge(act, "未知", Theme.DIM, Theme.alpha(Theme.DIM, 0x22)));
-            else r.addView(UI.badge(act, "未装", Theme.WARN, Theme.alpha(Theme.WARN, 0x22)));
-            TextView sz = UI.text(act, Util.fmtSize(a.size), 11.5f, Theme.DIM);
-            LinearLayout.LayoutParams sp = UI.lp(UI.WC, UI.WC);
-            sp.leftMargin = Theme.dp(act, 6);
-            r.addView(sz, sp);
-            apkList.addView(r);
-        }
-    }
 
     // ---------- 文件清理 ----------
 
@@ -860,38 +760,5 @@ public class FilesPage extends PageBase {
         });
     }
 
-    private void delApk() {
-        final List<JunkItem> sel = new ArrayList<JunkItem>();
-        int unins = 0;
-        for (Finder.ApkInfo a : apkItems) {
-            if (!a.checked) continue;
-            sel.add(new JunkItem(a.path, a.label, a.size));
-            if (!a.installed) unins++;
-        }
-        if (sel.isEmpty()) { act.toast("未选中安装包"); return; }
-        long total = 0;
-        for (JunkItem it : sel) total += it.size;
-        String warn = unins > 0 ? "\n\n⚠ 其中 " + unins + " 个尚未安装，删除后需重新下载。" : "";
-        final boolean toTrash = act.store.toTrash();
-        UI.confirm(act, "删除安装包",
-                "将删除 " + sel.size() + " 个 apk，约 " + Util.fmtSize(total) + warn,
-                new Runnable() {
-            public void run() {
-                new Thread(new Runnable() {
-                    public void run() {
-                        final CleanEngine.Result r = new CleanEngine(toTrash).cleanItems(sel);
-                        post(new Runnable() {
-                            public void run() {
-                                act.store.addStat(r.freed, r.count);
-                                act.toast("已处理 " + r.count + " 个 · "
-                                        + Util.fmtSize(toTrash ? r.trashed : r.freed));
-                                act.homePage().refreshDisk();
-                                scanApk();
-                            }
-                        });
-                    }
-                }).start();
-            }
-        });
-    }
+
 }
