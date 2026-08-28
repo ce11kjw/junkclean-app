@@ -264,13 +264,10 @@ public final class Finder {
         List<DupGroup> groups = new ArrayList<DupGroup>();
         for (Map.Entry<Long, List<File>> e : bySize.entrySet()) {
             if (e.getValue().size() < 2) continue;
-            Map<String, List<File>> byHash = new HashMap<String, List<File>>();
-            for (File f : e.getValue()) {
-                String h = Util.quickHash(f);
-                List<File> l = byHash.get(h);
-                if (l == null) { l = new ArrayList<File>(); byHash.put(h, l); }
-                l.add(f);
-            }
+            // 同桶文件并发算哈希：单文件哈希是 IO 密集型，串行时 CPU 空等
+            final Map<String, List<File>> byHash =
+                    java.util.Collections.synchronizedMap(new HashMap<String, List<File>>());
+            hashPool(e.getValue(), byHash);
             for (Map.Entry<String, List<File>> g : byHash.entrySet()) {
                 if (g.getValue().size() < 2) continue;
                 DupGroup dg = new DupGroup();
@@ -288,6 +285,42 @@ public final class Finder {
             }
         }
         return sortGroups(groups);
+    }
+
+    /** 并发计算一组文件的哈希并按哈希分桶 */
+    private static void hashPool(List<File> files, final Map<String, List<File>> out) {
+        if (files.size() <= 2) {
+            for (File f : files) putHash(out, Util.quickHash(f), f);
+            return;
+        }
+        final java.util.concurrent.CountDownLatch latch =
+                new java.util.concurrent.CountDownLatch(files.size());
+        final java.util.concurrent.Semaphore gate = new java.util.concurrent.Semaphore(4);
+        for (final File f : files) {
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        gate.acquire();
+                        putHash(out, Util.quickHash(f), f);
+                    } catch (InterruptedException ignored) {
+                    } finally {
+                        gate.release();
+                        latch.countDown();
+                    }
+                }
+            }).start();
+        }
+        try {
+            latch.await(60, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {}
+    }
+
+    private static void putHash(Map<String, List<File>> map, String h, File f) {
+        synchronized (map) {
+            List<File> l = map.get(h);
+            if (l == null) { l = new ArrayList<File>(); map.put(h, l); }
+            l.add(f);
+        }
     }
 
     private static List<DupGroup> sortGroups(List<DupGroup> g) {

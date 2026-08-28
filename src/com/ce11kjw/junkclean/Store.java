@@ -231,6 +231,97 @@ public class Store {
         e.apply();
     }
 
+    // ---------- 配置导出 / 导入 ----------
+
+    /** 导出为纯文本，换机后可粘贴回来。密钥不导出，避免明文外泄 */
+    public String exportConfig() {
+        StringBuilder b = new StringBuilder();
+        b.append("# JunkClean 配置\n");
+        b.append("theme=").append(theme()).append('\n');
+        b.append("accent=").append(accent()).append('\n');
+        b.append("toTrash=").append(toTrash() ? 1 : 0).append('\n');
+        b.append("trashDays=").append(trashDays()).append('\n');
+        b.append("scanRoot=").append(scanRoot()).append('\n');
+        b.append("fullScan=").append(fullScan() ? 1 : 0).append('\n');
+        b.append("keepPolicy=").append(keepPolicy()).append('\n');
+        b.append("orgSrc=").append(orgSrc()).append('\n');
+        b.append("[whitelist]\n");
+        for (String w : userWhitelist()) b.append(w).append('\n');
+        b.append("[rules]\n");
+        for (String r : rules()) b.append(r).append('\n');
+        b.append("[extmap]\n").append(extMap()).append('\n');
+        return b.toString();
+    }
+
+    /** 导入配置，返回应用的条目数 */
+    public int importConfig(String text) {
+        if (text == null || text.trim().isEmpty()) return 0;
+        int applied = 0;
+        String section = "";
+        List<String> wl = new ArrayList<String>();
+        List<String> rl = new ArrayList<String>();
+        StringBuilder ext = new StringBuilder();
+
+        for (String line : text.split("\n")) {
+            String l = line.trim();
+            if (l.isEmpty() || l.startsWith("#")) continue;
+            if (l.startsWith("[") && l.endsWith("]")) {
+                section = l.substring(1, l.length() - 1);
+                continue;
+            }
+            if ("whitelist".equals(section)) { wl.add(l); continue; }
+            if ("rules".equals(section)) { rl.add(l); continue; }
+            if ("extmap".equals(section)) { ext.append(l).append('\n'); continue; }
+
+            int eq = l.indexOf('=');
+            if (eq <= 0) continue;
+            String k = l.substring(0, eq).trim();
+            String v = l.substring(eq + 1).trim();
+            if ("theme".equals(k)) { setTheme(v); applied++; }
+            else if ("accent".equals(k)) { setAccent(v); applied++; }
+            else if ("toTrash".equals(k)) { setToTrash("1".equals(v)); applied++; }
+            else if ("trashDays".equals(k)) { setTrashDays(parseInt(v, 7)); applied++; }
+            else if ("scanRoot".equals(k)) { setScanRoot(v); applied++; }
+            else if ("fullScan".equals(k)) { setFullScan("1".equals(v)); applied++; }
+            else if ("keepPolicy".equals(k)) { setKeepPolicy(v); applied++; }
+            else if ("orgSrc".equals(k)) { setOrgSrc(v); applied++; }
+        }
+        if (!wl.isEmpty()) { setWhitelist(wl); applied += wl.size(); }
+        if (!rl.isEmpty()) { setRules(rl); applied += rl.size(); }
+        if (ext.length() > 0) { setExtMap(ext.toString().trim()); applied++; }
+        return applied;
+    }
+
+    private int parseInt(String s, int def) {
+        try { return Integer.parseInt(s); } catch (Exception e) { return def; }
+    }
+
+    // ---------- 分类累计统计 ----------
+
+    /** 按分类累计释放量，用于「哪类垃圾最多」 */
+    public void addCatStat(String catId, long freed, int count) {
+        if (catId == null || catId.isEmpty()) return;
+        sp.edit().putLong("cat_freed_" + catId, catFreed(catId) + freed)
+                 .putInt("cat_count_" + catId, catCount(catId) + count).apply();
+    }
+    public long catFreed(String catId) { return sp.getLong("cat_freed_" + catId, 0); }
+    public int catCount(String catId) { return sp.getInt("cat_count_" + catId, 0); }
+
+    public void resetCatStats() {
+        SharedPreferences.Editor e = sp.edit();
+        for (String id : CAT_IDS) e.remove("cat_freed_" + id).remove("cat_count_" + id);
+        e.apply();
+    }
+
+    public static final String[] CAT_IDS = {
+            "cache", "webview", "log", "temp", "thumb",
+            "apkjunk", "emptyjunk", "residue", "syscache"
+    };
+    public static final String[] CAT_NAMES = {
+            "应用缓存", "WebView", "日志", "临时文件", "缩略图",
+            "冗余安装包", "空文件", "应用残留", "系统缓存"
+    };
+
     // ---------- 工具 ----------
     private List<String> split(String s) {
         List<String> out = new ArrayList<String>();

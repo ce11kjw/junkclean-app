@@ -9,14 +9,23 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
-/** 视图工厂：统一深空玻璃风格 */
+/**
+ * 视图工厂。所有容器走「双层机加工外壳」：外壳是铝合金托盘，
+ * 内芯是嵌进去的玻璃面板，同心圆角由外半径减内边距算出。
+ */
 public final class UI {
     private UI() {}
 
     public static final int MP = LinearLayout.LayoutParams.MATCH_PARENT;
     public static final int WC = LinearLayout.LayoutParams.WRAP_CONTENT;
+
+    public static final int BTN_H = 38;
+    public static final int BTN_H_MAIN = 48;
+
+    // ---------- 布局 ----------
 
     public static LinearLayout col(Context c) {
         LinearLayout l = new LinearLayout(c);
@@ -31,84 +40,194 @@ public final class UI {
         return l;
     }
 
+    /**
+     * 双层卡片。返回外壳，内容加进 core()。
+     * 直接把内容塞进外壳会失去嵌入感，必须走内芯。
+     */
     public static LinearLayout card(Context c) {
-        LinearLayout l = col(c);
-        l.setBackground(Theme.card(c, 18));
-        int p = Theme.dp(c, 15);
-        l.setPadding(p, p, p, p);
-        return l;
+        return new Card(c);
     }
+
+    /** 取出卡片内芯（一般不需要，Card 会自动转发 addView） */
+    public static LinearLayout core(LinearLayout card) {
+        return card instanceof Card ? ((Card) card).core() : card;
+    }
+
+    // ---------- 文字 ----------
 
     public static TextView text(Context c, String s, float sp, int color) {
         TextView t = new TextView(c);
         t.setText(s);
         t.setTextSize(sp);
         t.setTextColor(color);
+        t.setTypeface(Theme.body());
+        return t;
+    }
+
+    /** 大号读数：细体 + 负字距 */
+    public static TextView display(Context c, String s, float sp, int color) {
+        TextView t = text(c, s, sp, color);
+        t.setTypeface(Theme.display());
+        t.setLetterSpacing(-0.025f);
+        return t;
+    }
+
+    /** 等宽数据：字节数 / 百分比 / 路径 / 计数 */
+    public static TextView data(Context c, String s, float sp, int color) {
+        TextView t = text(c, s, sp, color);
+        t.setTypeface(Theme.data());
         return t;
     }
 
     public static TextView title(Context c, String s) {
-        TextView t = text(c, s, 15, Theme.TEXT);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView t = text(c, s, Theme.T_HEAD, Theme.TEXT);
+        t.setTypeface(Theme.display(), Typeface.BOLD);
+        t.setLetterSpacing(-0.015f);
+        return t;
+    }
+
+    /** 眉标：微号 + 大字距 + 全大写 */
+    public static TextView eyebrow(Context c, String s) {
+        TextView t = text(c, s, Theme.T_MICRO, Theme.DIM);
+        t.setTypeface(Theme.micro());
+        t.setAllCaps(true);
+        t.setLetterSpacing(0.2f);
         return t;
     }
 
     public static TextView h2(Context c, String s) {
-        TextView t = text(c, s, 12.5f, Theme.MUTED);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView t = text(c, s, Theme.T_BODY_S, Theme.MUTED);
+        t.setTypeface(Theme.micro());
         return t;
     }
 
     public static TextView note(Context c, String s) {
-        TextView t = text(c, s, 11.5f, Theme.DIM);
-        t.setLineSpacing(0, 1.35f);
+        TextView t = text(c, s, Theme.T_BODY_S, Theme.DIM);
+        t.setLineSpacing(0, 1.45f);
         return t;
     }
 
-    /** 空状态：✦ + 文案，居中 */
+    /** 分区标题：眉标风格，卡片之间的结构分隔 */
+    public static View section(Context c, String s) {
+        LinearLayout r = row(c);
+        r.setPadding(Theme.dp(c, 6), Theme.dp(c, Theme.S5), 0, Theme.dp(c, Theme.S2));
+        TextView t = eyebrow(c, s);
+        t.setTextColor(Theme.ACCENT);
+        r.addView(t);
+        View line = new View(c);
+        line.setBackgroundColor(Theme.HAIRLINE);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Math.max(1, Theme.dp(c, 0.8f)), 1f);
+        lp.leftMargin = Theme.dp(c, Theme.S3);
+        r.addView(line, lp);
+        return r;
+    }
+
     public static TextView empty(Context c, String s) {
-        TextView t = text(c, "✦\n" + s, 12, Theme.DIM);
+        TextView t = text(c, s, Theme.T_BODY_S, Theme.DIM);
         t.setGravity(Gravity.CENTER);
         t.setLineSpacing(0, 1.6f);
-        t.setPadding(0, Theme.dp(c, 18), 0, Theme.dp(c, 18));
+        t.setPadding(0, Theme.dp(c, Theme.S5), 0, Theme.dp(c, Theme.S5));
         return t;
+    }
+
+    // ---------- 按钮 ----------
+
+    private static Button baseBtn(Context c, String s) {
+        Button b = new Button(c);
+        b.setText(s);
+        b.setTextSize(Theme.T_BODY_S);
+        b.setTypeface(Theme.micro());
+        b.setAllCaps(false);
+        b.setStateListAnimator(null);
+        b.setPadding(0, 0, 0, 0);
+        b.setLetterSpacing(0.02f);
+        Anim.pressable(b);
+        return b;
     }
 
     public static Button primary(Context c, String s) {
-        Button b = new Button(c);
-        b.setText(s);
-        b.setTextColor(0xFFFFFFFF);
-        b.setTextSize(12.5f);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setAllCaps(false);
+        Button b = baseBtn(c, s);
+        b.setTextColor(Theme.light ? 0xFF06231B : 0xFF04140F);
         b.setBackground(Theme.primaryBtn(c));
-        b.setStateListAnimator(null);
-        b.setPadding(0, 0, 0, 0);
         return b;
     }
 
     public static Button danger(Context c, String s) {
-        Button b = primary(c, s);
+        Button b = baseBtn(c, s);
+        b.setTextColor(0xFFFFFFFF);
         b.setBackground(Theme.dangerBtn(c));
         return b;
     }
 
     public static Button secondary(Context c, String s) {
-        Button b = primary(c, s);
-        b.setBackground(Theme.secondaryBtn(c));
+        Button b = baseBtn(c, s);
         b.setTextColor(Theme.MUTED);
+        b.setBackground(Theme.ghostBtn(c));
         return b;
+    }
+
+    /**
+     * 主行动按钮：文字居左，箭头包在自己的圆形容器里贴齐右内边距。
+     * 按下时整体缩放，内圈同时向右上位移，制造内部动能。
+     */
+    public static LinearLayout actionButton(final Context c, String label, String glyph,
+                                            final Runnable onClick) {
+        final LinearLayout wrap = row(c);
+        wrap.setBackground(Theme.primaryBtn(c));
+        wrap.setGravity(Gravity.CENTER_VERTICAL);
+        int ph = Theme.dp(c, 20);
+        wrap.setPadding(ph, Theme.dp(c, 6), Theme.dp(c, 6), Theme.dp(c, 6));
+
+        TextView t = text(c, label, Theme.T_BODY, Theme.light ? 0xFF06231B : 0xFF04140F);
+        t.setTypeface(Theme.micro());
+        t.setLetterSpacing(0.03f);
+        wrap.addView(t, new LinearLayout.LayoutParams(0, WC, 1f));
+
+        final TextView well = text(c, glyph, Theme.T_BODY, Theme.light ? 0xFF06231B : 0xFF04140F);
+        well.setBackground(Theme.iconWell(c, true));
+        well.setGravity(Gravity.CENTER);
+        int s = Theme.dp(c, 32);
+        wrap.addView(well, new LinearLayout.LayoutParams(s, s));
+
+        wrap.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, android.view.MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        wrap.animate().scaleX(0.975f).scaleY(0.975f)
+                                .setDuration(110).setInterpolator(Theme.press()).start();
+                        well.animate().translationX(Theme.dp(c, 2))
+                                .translationY(-Theme.dp(c, 1)).scaleX(1.06f).scaleY(1.06f)
+                                .setDuration(180).setInterpolator(Theme.press()).start();
+                        break;
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        wrap.animate().scaleX(1f).scaleY(1f)
+                                .setDuration(240).setInterpolator(Theme.spring()).start();
+                        well.animate().translationX(0).translationY(0).scaleX(1f).scaleY(1f)
+                                .setDuration(300).setInterpolator(Theme.spring()).start();
+                        break;
+                }
+                return false;
+            }
+        });
+        wrap.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { if (onClick != null) onClick.run(); }
+        });
+        return wrap;
     }
 
     public static Button chip(Context c, String s, boolean active) {
         Button b = new Button(c);
         b.setText(s);
-        b.setTextSize(11f);
+        b.setTextSize(Theme.T_MICRO + 1.5f);
+        b.setTypeface(Theme.micro());
         b.setAllCaps(false);
-        b.setPadding(Theme.dp(c, 10), 0, Theme.dp(c, 10), 0);
+        b.setPadding(Theme.dp(c, 12), 0, Theme.dp(c, 12), 0);
         b.setMinWidth(0); b.setMinimumWidth(0);
-        b.setMinHeight(Theme.dp(c, 26)); b.setMinimumHeight(Theme.dp(c, 26));
+        b.setMinHeight(Theme.dp(c, 28)); b.setMinimumHeight(Theme.dp(c, 28));
         b.setStateListAnimator(null);
+        b.setLetterSpacing(0.04f);
+        Anim.pressable(b, 0.94f);
         setChipActive(c, b, active);
         return b;
     }
@@ -116,17 +235,20 @@ public final class UI {
     public static void setChipActive(Context c, Button b, boolean active) {
         if (active) {
             b.setBackground(Theme.primaryBtn(c));
-            b.setTextColor(0xFFFFFFFF);
+            b.setTextColor(Theme.light ? 0xFF06231B : 0xFF04140F);
         } else {
-            b.setBackground(Theme.secondaryBtn(c));
+            b.setBackground(Theme.ghostBtn(c));
             b.setTextColor(Theme.MUTED);
         }
     }
 
     public static TextView badge(Context c, String s, int fg, int bg) {
-        TextView t = text(c, s, 10.5f, fg);
+        TextView t = text(c, s, Theme.T_MICRO, fg);
+        t.setTypeface(Theme.micro());
+        t.setAllCaps(true);
+        t.setLetterSpacing(0.1f);
         t.setBackground(Theme.badge(c, bg));
-        t.setPadding(Theme.dp(c, 8), Theme.dp(c, 2), Theme.dp(c, 8), Theme.dp(c, 2));
+        t.setPadding(Theme.dp(c, 8), Theme.dp(c, 3), Theme.dp(c, 8), Theme.dp(c, 3));
         return t;
     }
 
@@ -139,46 +261,60 @@ public final class UI {
         return cb;
     }
 
-    /** 开关行：标题 + 说明 + 右侧 Switch */
-    public static LinearLayout switchRow(final Context c, String title, String desc,
-                                        boolean on, final android.widget.CompoundButton.OnCheckedChangeListener cb) {
-        LinearLayout r = row(c);
-        r.setPadding(0, Theme.dp(c, 6), 0, Theme.dp(c, 6));
-        LinearLayout info = col(c);
-        info.addView(text(c, title, 13, Theme.TEXT));
-        if (desc != null && !desc.isEmpty()) info.addView(note(c, desc));
-        LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(0, WC, 1f);
-        r.addView(info, ip);
+    public static android.widget.Switch switchView(Context c, boolean on) {
         android.widget.Switch sw = new android.widget.Switch(c);
         sw.setChecked(on);
-        sw.setThumbTintList(android.content.res.ColorStateList.valueOf(Theme.ACCENT));
-        sw.setTrackTintList(android.content.res.ColorStateList.valueOf(Theme.LINE2));
-        sw.setOnCheckedChangeListener(cb);
+        sw.setThumbTintList(android.content.res.ColorStateList.valueOf(
+                on ? Theme.ACCENT : Theme.MUTED));
+        sw.setTrackTintList(android.content.res.ColorStateList.valueOf(
+                Theme.alpha(on ? Theme.ACCENT : 0xFFFFFF, 0x40)));
+        return sw;
+    }
+
+    public static android.widget.Switch smallSwitch(Context c, boolean on) {
+        android.widget.Switch sw = switchView(c, on);
+        sw.setScaleX(0.85f);
+        sw.setScaleY(0.85f);
+        return sw;
+    }
+
+    /** 开关行：标题 + 说明 + 右侧开关，颜色随状态过渡 */
+    public static LinearLayout switchRow(final Context c, String title, String desc, boolean on,
+                                        final android.widget.CompoundButton.OnCheckedChangeListener cb) {
+        LinearLayout r = row(c);
+        r.setPadding(0, Theme.dp(c, 7), 0, Theme.dp(c, 7));
+        LinearLayout info = col(c);
+        info.addView(text(c, title, Theme.T_BODY, Theme.TEXT));
+        if (desc != null && !desc.isEmpty()) info.addView(note(c, desc));
+        r.addView(info, new LinearLayout.LayoutParams(0, WC, 1f));
+
+        final android.widget.Switch sw = switchView(c, on);
+        sw.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean checked) {
+                sw.setThumbTintList(android.content.res.ColorStateList.valueOf(
+                        checked ? Theme.ACCENT : Theme.MUTED));
+                sw.setTrackTintList(android.content.res.ColorStateList.valueOf(
+                        Theme.alpha(checked ? Theme.ACCENT : 0xFFFFFF, 0x40)));
+                if (cb != null) cb.onCheckedChanged(v, checked);
+            }
+        });
         r.addView(sw);
         return r;
     }
 
-    /** 小号 Switch（整理规则等紧凑场景） */
-    public static android.widget.Switch smallSwitch(Context c, boolean on) {
-        android.widget.Switch sw = new android.widget.Switch(c);
-        sw.setChecked(on);
-        sw.setScaleX(0.85f);
-        sw.setScaleY(0.85f);
-        sw.setThumbTintList(android.content.res.ColorStateList.valueOf(Theme.ACCENT));
-        sw.setTrackTintList(android.content.res.ColorStateList.valueOf(Theme.LINE2));
-        return sw;
-    }
+    // ---------- 输入 ----------
 
     public static EditText input(Context c, String hint, String value) {
         EditText e = new EditText(c);
         e.setHint(hint);
         e.setText(value == null ? "" : value);
-        e.setTextSize(12.5f);
+        e.setTextSize(Theme.T_DATA_S);
+        e.setTypeface(Theme.data());
         e.setTextColor(Theme.TEXT);
         e.setHintTextColor(Theme.DIM);
-        e.setBackground(Theme.inner(c, 12));
-        int p = Theme.dp(c, 10);
-        e.setPadding(p + Theme.dp(c, 2), p, p, p);
+        e.setBackground(Theme.item(c, false));
+        int p = Theme.dp(c, 12);
+        e.setPadding(p, p - Theme.dp(c, 2), p, p - Theme.dp(c, 2));
         e.setSingleLine(true);
         e.setEllipsize(TextUtils.TruncateAt.END);
         return e;
@@ -192,13 +328,15 @@ public final class UI {
         return e;
     }
 
-    /** 分区标题：小号大写 + 强调色 */
-    public static TextView section(Context c, String s) {
-        TextView t = text(c, s, 11, Theme.ACCENT);
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        t.setPadding(Theme.dp(c, 4), Theme.dp(c, 10), 0, Theme.dp(c, 4));
-        return t;
+    /** 搜索框：带前缀符号 */
+    public static EditText search(Context c, String hint) {
+        EditText e = input(c, hint, "");
+        e.setTypeface(Theme.body());
+        e.setTextSize(Theme.T_BODY_S);
+        return e;
     }
+
+    // ---------- 间隔 ----------
 
     public static View spacer(Context c, int dp) {
         View v = new View(c);
@@ -208,9 +346,9 @@ public final class UI {
 
     public static View divider(Context c) {
         View v = new View(c);
-        v.setBackgroundColor(Theme.LINE);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(MP, Math.max(1, Theme.dp(c, 0.6f)));
-        p.topMargin = p.bottomMargin = Theme.dp(c, 8);
+        v.setBackgroundColor(Theme.HAIRLINE);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(MP, Math.max(1, Theme.dp(c, 0.8f)));
+        p.topMargin = p.bottomMargin = Theme.dp(c, Theme.S3);
         v.setLayoutParams(p);
         return v;
     }
@@ -229,58 +367,94 @@ public final class UI {
         return new LinearLayout.LayoutParams(0, Theme.dp(c, hDp), w);
     }
 
-    /** 标准按钮高度（紧凑） */
-    public static final int BTN_H = 36;
-    public static final int BTN_H_MAIN = 44;
-
-    /** 等宽按钮行，自动加间距 */
     public static LinearLayout btnRow(Context c, int heightDp, Button... bs) {
         LinearLayout r = row(c);
         for (int i = 0; i < bs.length; i++) {
             LinearLayout.LayoutParams p = weight(1f, heightDp, c);
-            if (i > 0) p.leftMargin = Theme.dp(c, 6);
+            if (i > 0) p.leftMargin = Theme.dp(c, Theme.S2);
             r.addView(bs[i], p);
         }
         return r;
     }
 
-    // ================= 拟态玻璃对话框 =================
+    /** 文件项行：勾选 + 名称（等宽体积）+ 长按进度环 */
+    public static LinearLayout fileRow(final Context c, final JunkItem it,
+                                       final Runnable onChange, final Runnable onLongPress) {
+        LinearLayout r = row(c);
+        int pv = Theme.dp(c, 7);
+        r.setPadding(Theme.dp(c, 6), pv, Theme.dp(c, 6), pv);
 
-    /** 构造玻璃风格对话框骨架，返回 [dialog, 内容容器] */
+        final CheckBox cb = check(c, it.checked);
+        cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
+                it.checked = on;
+                if (on) Anim.tick(v);
+                if (onChange != null) onChange.run();
+            }
+        });
+        r.addView(cb);
+
+        TextView nm = text(c, it.name, Theme.T_BODY_S, Theme.MUTED);
+        nm.setSingleLine(true);
+        nm.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, WC, 1f);
+        np.leftMargin = Theme.dp(c, Theme.S2);
+        np.rightMargin = Theme.dp(c, Theme.S2);
+        r.addView(nm, np);
+
+        r.addView(data(c, Util.fmtSize(it.size), Theme.T_DATA_S, Theme.DIM));
+
+        if (onLongPress != null) {
+            final LongPressRing ring = new LongPressRing(c);
+            ring.setOnComplete(onLongPress);
+            LinearLayout.LayoutParams rp = lp(WC, WC);
+            rp.leftMargin = Theme.dp(c, Theme.S2);
+            r.addView(ring, rp);
+            r.setOnTouchListener(new View.OnTouchListener() {
+                public boolean onTouch(View v, android.view.MotionEvent e) {
+                    ring.handle(e);
+                    return false;
+                }
+            });
+        }
+        return r;
+    }
+
+    // ================= 玻璃对话框 =================
+
     private static Object[] glassDialog(Context c, String title) {
         final android.app.Dialog d = new android.app.Dialog(c);
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
 
         LinearLayout wrap = col(c);
         wrap.setBackground(Theme.dialog(c));
-        int p = Theme.dp(c, 20);
-        wrap.setPadding(p, Theme.dp(c, 18), p, Theme.dp(c, 14));
+        int p = Theme.dp(c, 22);
+        wrap.setPadding(p, Theme.dp(c, 20), p, Theme.dp(c, 16));
 
         if (title != null && !title.isEmpty()) {
-            TextView t = text(c, title, 16, Theme.TEXT);
-            t.setTypeface(Typeface.DEFAULT_BOLD);
+            TextView t = display(c, title, Theme.T_HEAD, Theme.TEXT);
+            t.setTypeface(Theme.display(), Typeface.BOLD);
             wrap.addView(t);
         }
 
         LinearLayout body = col(c);
-        wrap.addView(body, lpm(c, MP, WC, title == null ? 0 : 10));
+        wrap.addView(body, lpm(c, MP, WC, title == null ? 0 : Theme.S3));
 
         d.setContentView(wrap);
         android.view.Window w = d.getWindow();
         if (w != null) {
             w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
-            w.setDimAmount(Theme.glass ? 0.45f : 0.6f);
+            w.setDimAmount(0.62f);
             android.view.WindowManager.LayoutParams lp = w.getAttributes();
             lp.width = (int) (c.getResources().getDisplayMetrics().widthPixels * 0.88f);
             w.setAttributes(lp);
         }
+        Anim.dialogIn(wrap);
         return new Object[]{d, body, wrap};
     }
 
-    /** 底部按钮行（对话框用） */
     private static void dialogButtons(Context c, LinearLayout wrap, final android.app.Dialog d,
-                                      String okText, final Runnable onOk,
-                                      String cancelText) {
+                                      String okText, final Runnable onOk, String cancelText) {
         Button ok = primary(c, okText);
         ok.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -289,31 +463,28 @@ public final class UI {
             }
         });
         if (cancelText == null) {
-            wrap.addView(btnRow(c, BTN_H, ok), lpm(c, MP, WC, 16));
+            wrap.addView(btnRow(c, BTN_H, ok), lpm(c, MP, WC, Theme.S4));
             return;
         }
         Button cancel = secondary(c, cancelText);
         cancel.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { d.dismiss(); }
         });
-        wrap.addView(btnRow(c, BTN_H, cancel, ok), lpm(c, MP, WC, 16));
+        wrap.addView(btnRow(c, BTN_H, cancel, ok), lpm(c, MP, WC, Theme.S4));
     }
 
-    /** 确认对话框 */
     public static void confirm(Context c, String title, String msg, final Runnable onOk) {
         Object[] parts = glassDialog(c, title);
         android.app.Dialog d = (android.app.Dialog) parts[0];
         LinearLayout body = (LinearLayout) parts[1];
         LinearLayout wrap = (LinearLayout) parts[2];
-
-        TextView m = text(c, msg, 13, Theme.MUTED);
-        m.setLineSpacing(0, 1.45f);
+        TextView m = text(c, msg, Theme.T_BODY_S, Theme.MUTED);
+        m.setLineSpacing(0, 1.5f);
         body.addView(m);
         dialogButtons(c, wrap, d, "确定", onOk, "取消");
         d.show();
     }
 
-    /** 单选对话框 */
     public static void pick(Context c, String title, final String[] labels, final int checked,
                             final android.content.DialogInterface.OnClickListener cb) {
         Object[] parts = glassDialog(c, title);
@@ -323,35 +494,35 @@ public final class UI {
 
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;
-            LinearLayout row = row(c);
-            row.setBackground(Theme.inner(c, 12));
-            int pd = Theme.dp(c, 12);
-            row.setPadding(pd, Theme.dp(c, 10), pd, Theme.dp(c, 10));
-            TextView t = text(c, labels[i], 13.5f, idx == checked ? Theme.ACCENT : Theme.TEXT);
-            row.addView(t, new LinearLayout.LayoutParams(0, WC, 1f));
-            if (idx == checked) row.addView(text(c, "✓", 14, Theme.ACCENT));
-            row.setOnClickListener(new View.OnClickListener() {
+            LinearLayout r = row(c);
+            r.setBackground(Theme.item(c, false));
+            int pd = Theme.dp(c, 14);
+            r.setPadding(pd, Theme.dp(c, 12), pd, Theme.dp(c, 12));
+            TextView t = text(c, labels[i], Theme.T_BODY,
+                    idx == checked ? Theme.ACCENT : Theme.TEXT);
+            r.addView(t, new LinearLayout.LayoutParams(0, WC, 1f));
+            if (idx == checked) r.addView(text(c, "✓", Theme.T_BODY, Theme.ACCENT));
+            Anim.pressable(r, 0.98f);
+            r.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     if (cb != null) cb.onClick(d, idx);
                     d.dismiss();
                 }
             });
-            body.addView(row, lpm(c, MP, WC, i == 0 ? 0 : 6));
+            body.addView(r, lpm(c, MP, WC, i == 0 ? 0 : Theme.S2));
         }
         dialogButtons(c, wrap, d, "关闭", null, null);
         d.show();
     }
 
-    /** 长文本对话框（预览清单等），内容可滚动 */
     public static void info(Context c, String title, String bodyText) {
         Object[] parts = glassDialog(c, title);
         android.app.Dialog d = (android.app.Dialog) parts[0];
         LinearLayout body = (LinearLayout) parts[1];
         LinearLayout wrap = (LinearLayout) parts[2];
-
-        TextView m = text(c, bodyText, 12, Theme.MUTED);
-        m.setLineSpacing(0, 1.4f);
-        android.widget.ScrollView sv = new android.widget.ScrollView(c);
+        TextView m = data(c, bodyText, Theme.T_DATA_S, Theme.MUTED);
+        m.setLineSpacing(0, 1.45f);
+        ScrollView sv = new ScrollView(c);
         sv.setVerticalScrollBarEnabled(false);
         sv.addView(m);
         int maxH = (int) (c.getResources().getDisplayMetrics().heightPixels * 0.5f);
@@ -360,7 +531,6 @@ public final class UI {
         d.show();
     }
 
-    /** 带输入框的对话框 */
     public static void prompt(Context c, String title, String hint, String value,
                               final int minLines, final Callback<String> onOk) {
         Object[] parts = glassDialog(c, title);
@@ -369,7 +539,7 @@ public final class UI {
         LinearLayout wrap = (LinearLayout) parts[2];
 
         final EditText e = minLines > 1 ? multiline(c, hint, value, minLines) : input(c, hint, value);
-        body.addView(e, minLines > 1 ? lp(MP, WC) : lp(MP, Theme.dp(c, BTN_H)));
+        body.addView(e, minLines > 1 ? lp(MP, WC) : lp(MP, Theme.dp(c, BTN_H + 4)));
 
         Button ok = primary(c, "确定");
         Button cancel = secondary(c, "取消");
@@ -382,11 +552,10 @@ public final class UI {
         cancel.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { d.dismiss(); }
         });
-        wrap.addView(btnRow(c, BTN_H, cancel, ok), lpm(c, MP, WC, 16));
+        wrap.addView(btnRow(c, BTN_H, cancel, ok), lpm(c, MP, WC, Theme.S4));
         d.show();
     }
 
-    /** 三按钮对话框（如：清空 / 关闭 / 全部还原） */
     public static void triple(Context c, String title, String msg,
                               String leftText, final Runnable onLeft,
                               String rightText, final Runnable onRight) {
@@ -395,9 +564,9 @@ public final class UI {
         LinearLayout body = (LinearLayout) parts[1];
         LinearLayout wrap = (LinearLayout) parts[2];
 
-        TextView m = text(c, msg, 12, Theme.MUTED);
-        m.setLineSpacing(0, 1.4f);
-        android.widget.ScrollView sv = new android.widget.ScrollView(c);
+        TextView m = data(c, msg, Theme.T_DATA_S, Theme.MUTED);
+        m.setLineSpacing(0, 1.45f);
+        ScrollView sv = new ScrollView(c);
         sv.setVerticalScrollBarEnabled(false);
         sv.addView(m);
         int maxH = (int) (c.getResources().getDisplayMetrics().heightPixels * 0.42f);
@@ -415,54 +584,25 @@ public final class UI {
         right.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { d.dismiss(); if (onRight != null) onRight.run(); }
         });
-        wrap.addView(btnRow(c, BTN_H, left, close, right), lpm(c, MP, WC, 16));
+        wrap.addView(btnRow(c, BTN_H, left, close, right), lpm(c, MP, WC, Theme.S4));
         d.show();
     }
 
-    /** 进度对话框，返回可更新文本的句柄 */
+    /** 进度对话框，返回 [dialog, 文本, 分段表] */
     public static Object[] progress(Context c, String title, String initial) {
         Object[] parts = glassDialog(c, title);
         android.app.Dialog d = (android.app.Dialog) parts[0];
         LinearLayout body = (LinearLayout) parts[1];
-        TextView m = text(c, initial, 13, Theme.MUTED);
+        TextView m = data(c, initial, Theme.T_DATA, Theme.MUTED);
         body.addView(m);
-        StorageBarView bar = new StorageBarView(c);
-        body.addView(bar, lpm(c, MP, WC, 12));
+        SegmentGauge g = new SegmentGauge(c, true);
+        body.addView(g, lpm(c, MP, WC, Theme.S3));
         d.setCancelable(false);
         d.show();
-        return new Object[]{d, m, bar};
+        return new Object[]{d, m, g};
     }
 
-    /** 简单回调 */
     public interface Callback<T> {
         void call(T value);
-    }
-
-    /** 文件项行：勾选框 + 名称 + 体积，可选长按回调 */
-    public static LinearLayout fileRow(final Context c, final JunkItem it,
-                                       final Runnable onChange, final Runnable onLongPress) {
-        LinearLayout r = row(c);
-        r.setPadding(0, Theme.dp(c, 5), 0, Theme.dp(c, 5));
-        final CheckBox cb = check(c, it.checked);
-        cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(android.widget.CompoundButton v, boolean on) {
-                it.checked = on;
-                if (onChange != null) onChange.run();
-            }
-        });
-        r.addView(cb);
-        TextView nm = text(c, it.name, 12, Theme.MUTED);
-        nm.setSingleLine(true);
-        nm.setEllipsize(TextUtils.TruncateAt.MIDDLE);
-        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(0, WC, 1f);
-        np.leftMargin = Theme.dp(c, 4);
-        r.addView(nm, np);
-        r.addView(text(c, Util.fmtSize(it.size), 11.5f, Theme.DIM));
-        if (onLongPress != null) {
-            r.setOnLongClickListener(new View.OnLongClickListener() {
-                public boolean onLongClick(View v) { onLongPress.run(); return true; }
-            });
-        }
-        return r;
     }
 }

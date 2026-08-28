@@ -14,15 +14,16 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "2.5.0";
+    public static final String VERSION = "3.0.0";
 
     private FrameLayout content;
     private static final int TAB_N = 5;
-    private final Button[] tabs = new Button[TAB_N];
+    private final LinearLayout[] tabs = new LinearLayout[TAB_N];
     private HomePage home;
     private ToolsPage tools;
     private FilesPage files;
@@ -103,37 +104,71 @@ public class MainActivity extends Activity {
         toast("外观已更新");
     }
 
+    private static final String[] TAB_ICON = {"◉", "◈", "▤", "▦", "⚙"};
+    private static final String[] TAB_NAME = {"首页", "工具", "文件", "统计", "设置"};
+
+    /** 浮空玻璃药丸导航：脱离底边，激活项有药丸背景与文字标签 */
     private LinearLayout buildTabBar() {
+        LinearLayout outer = UI.row(this);
+        int m = Theme.dp(this, Theme.S3);
+        outer.setPadding(m, 0, m, m);
+
         LinearLayout bar = UI.row(this);
         bar.setBackground(Theme.navBar(this));
-        int pv = Theme.dp(this, 6);
-        bar.setPadding(Theme.dp(this, 10), pv, Theme.dp(this, 10), pv);
+        int pv = Theme.dp(this, 5);
+        bar.setPadding(pv, pv, pv, pv);
 
-        String[] labels = {"🏠", "🧰", "📂", "📊", "⚙"};
         for (int i = 0; i < TAB_N; i++) {
             final int idx = i;
-            Button t = new Button(this);
-            t.setText(labels[i]);
-            t.setTextSize(15f);
-            t.setAllCaps(false);
-            t.setStateListAnimator(null);
-            t.setMinHeight(Theme.dp(this, 38));
-            t.setMinimumHeight(Theme.dp(this, 38));
-            t.setOnClickListener(new View.OnClickListener() {
+            LinearLayout tab = UI.col(this);
+            tab.setGravity(android.view.Gravity.CENTER);
+            int tp = Theme.dp(this, Theme.S2);
+            tab.setPadding(tp, Theme.dp(this, 7), tp, Theme.dp(this, 6));
+
+            TextView icon = UI.text(this, TAB_ICON[i], 15, Theme.DIM);
+            icon.setGravity(android.view.Gravity.CENTER);
+            tab.addView(icon);
+
+            TextView label = UI.text(this, TAB_NAME[i], Theme.T_MICRO, Theme.DIM);
+            label.setTypeface(Theme.micro());
+            label.setLetterSpacing(0.08f);
+            label.setGravity(android.view.Gravity.CENTER);
+            tab.addView(label, UI.lpm(this, UI.WC, UI.WC, 3));
+
+            tab.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) { switchTab(idx); }
             });
+            Anim.pressable(tab, 0.94f);
+
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, UI.WC, 1f);
-            p.leftMargin = p.rightMargin = Theme.dp(this, 2);
-            bar.addView(t, p);
-            tabs[i] = t;
+            bar.addView(tab, p);
+            tabs[i] = tab;
         }
-        return bar;
+
+        outer.addView(bar, new LinearLayout.LayoutParams(UI.MP, UI.WC));
+        return outer;
+    }
+
+    /** 激活态：药丸背景 + 强调色，图标轻微上浮 */
+    private void setTabActive(int i, boolean active) {
+        LinearLayout tab = tabs[i];
+        if (tab == null) return;
+        tab.setBackground(active ? Theme.navPill(this) : null);
+        int color = active ? Theme.ACCENT : Theme.DIM;
+        for (int k = 0; k < tab.getChildCount(); k++) {
+            View v = tab.getChildAt(k);
+            if (v instanceof TextView) ((TextView) v).setTextColor(color);
+        }
+        View icon = tab.getChildAt(0);
+        icon.animate().translationY(active ? -Theme.dp(this, 1) : 0)
+                .scaleX(active ? 1.08f : 1f).scaleY(active ? 1.08f : 1f)
+                .setDuration(260).setInterpolator(Theme.spring()).start();
     }
 
     void switchTab(int idx) {
         if (current == idx) return;
         current = idx;
-        for (int i = 0; i < TAB_N; i++) UI.setChipActive(this, tabs[i], i == idx);
+        for (int i = 0; i < TAB_N; i++) setTabActive(i, i == idx);
         content.removeAllViews();
         View v;
         switch (idx) {
@@ -146,6 +181,7 @@ public class MainActivity extends Activity {
         }
         content.addView(v, new FrameLayout.LayoutParams(UI.MP, UI.MP));
         v.scrollTo(0, 0);
+        Anim.swapIn(v);
     }
 
     private void requestStorageIfNeeded() {

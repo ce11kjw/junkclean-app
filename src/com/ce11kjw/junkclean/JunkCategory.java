@@ -11,7 +11,8 @@ public class JunkCategory {
     public String icon;
     public boolean careful;      // 谨慎项，默认不勾
     public boolean needRoot;     // 需要 root 才能扫
-    public List<JunkItem> items = new ArrayList<JunkItem>();
+    public List<JunkItem> items =
+            java.util.Collections.synchronizedList(new ArrayList<JunkItem>());
 
     public JunkCategory(String id, String name, String desc, String icon,
                         boolean careful, boolean needRoot) {

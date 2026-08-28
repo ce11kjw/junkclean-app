@@ -21,7 +21,7 @@ public class FilesPage extends PageBase {
     private ScrollView scroll;
 
     // 大文件
-    private EditText bigMin;
+    private EditText bigMin, bigSearch, apkSearch, brSearch;
     private LinearLayout bigList;
     private TextView bigSum;
     private final List<JunkItem> bigItems = new ArrayList<JunkItem>();
@@ -62,20 +62,27 @@ public class FilesPage extends PageBase {
     public View view() {
         if (scroll != null) return scroll;
         LinearLayout root = UI.col(act);
-        int p = Theme.dp(act, 14);
-        root.setPadding(p, p, p, p);
+        int p = Theme.dp(act, Theme.S4);
+        root.setPadding(p, Theme.dp(act, Theme.S5), p, p);
+
+        LinearLayout head = UI.col(act);
+        head.addView(UI.eyebrow(act, "存储"));
+        TextView ht = UI.display(act, "文件", Theme.T_TITLE, Theme.TEXT);
+        ht.setTypeface(Theme.display(), android.graphics.Typeface.BOLD);
+        head.addView(ht, UI.lpm(act, UI.WC, UI.WC, 2));
+        root.addView(head);
 
         root.addView(UI.section(act, "大文件"));
-        root.addView(bigCard());
+        root.addView(bigCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "重复文件"));
-        root.addView(dupCard());
+        root.addView(dupCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "空文件与空目录"));
-        root.addView(emptyCard());
+        root.addView(emptyCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "安装包"));
-        root.addView(apkCard());
+        root.addView(apkCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "文件清理"));
-        root.addView(browseCard());
-        root.addView(UI.spacer(act, 24));
+        root.addView(browseCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        root.addView(UI.spacer(act, Theme.S8));
 
         scroll = new ScrollView(act);
         scroll.setVerticalScrollBarEnabled(false);
@@ -87,7 +94,9 @@ public class FilesPage extends PageBase {
 
     private View bigCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "按类型筛选、按体积或时间排序，可只看旧文件"));
+        c.addView(UI.eyebrow(act, "大文件"));
+        c.addView(UI.title(act, "占用排查"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "按类型筛选，按体积或时间排序，可只看旧文件"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
         LinearLayout typeRow = UI.row(act);
         String[][] types = {{"all","全部"},{"img","图片"},{"vid","视频"},{"aud","音频"},
@@ -135,16 +144,32 @@ public class FilesPage extends PageBase {
         }
         c.addView(ctl, UI.lpm(act, UI.MP, UI.WC, 8));
 
-        bigSum = UI.note(act, "");
-        c.addView(bigSum, UI.lpm(act, UI.MP, UI.WC, 8));
+        bigSearch = UI.search(act, "按文件名过滤");
+        bigSearch.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(android.text.Editable e) { renderBig(); }
+        });
+        c.addView(bigSearch, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        bigSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(bigSum, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
         bigList = UI.col(act);
         c.addView(bigList, UI.lpm(act, UI.MP, UI.WC, 4));
 
-        Button selAll = UI.secondary(act, "全选");
+        Button selAll = UI.secondary(act, "反选");
         Button trash = UI.secondary(act, "移入回收站");
         Button del = UI.danger(act, "彻底删除");
         selAll.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { selectAll(bigItems, bigList, true); updateSum(bigItems, bigSum); }
+            public void onClick(View v) { invertAll(bigItems, bigList); updateSum(bigItems, bigSum); }
+        });
+        selAll.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                selectTopN(bigItems, bigList, 10);
+                updateSum(bigItems, bigSum);
+                act.toast("已选中体积最大的 10 项");
+                return true;
+            }
         });
         trash.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { removeItems(bigItems, bigList, bigSum, true); }
@@ -204,21 +229,25 @@ public class FilesPage extends PageBase {
 
     private void renderBig() {
         bigList.removeAllViews();
+        String kw = bigSearch == null ? ""
+                : bigSearch.getText().toString().trim().toLowerCase(java.util.Locale.US);
         List<JunkItem> show = new ArrayList<JunkItem>();
-        for (JunkItem it : bigItems) if (Finder.matchType(it.name, bigType)) show.add(it);
+        for (JunkItem it : bigItems) {
+            if (!Finder.matchType(it.name, bigType)) continue;
+            if (!kw.isEmpty() && !it.name.toLowerCase(java.util.Locale.US).contains(kw)) continue;
+            show.add(it);
+        }
         sortList(show, bigSort);
         if (show.isEmpty()) {
             bigSum.setText("");
-            bigList.addView(UI.empty(act, "未发现符合条件的文件"));
+            bigList.addView(UI.empty(act, kw.isEmpty()
+                    ? "未发现符合条件的文件" : "没有匹配「" + kw + "」的文件"));
             return;
         }
         long total = 0;
         for (JunkItem it : show) total += it.size;
-        bigSum.setText(show.size() + " 项 · 合计 " + Util.fmtSize(total));
-        Runnable onChange = new Runnable() {
-            public void run() { updateSum(bigItems, bigSum); }
-        };
-        for (JunkItem it : show) bigList.addView(UI.fileRow(act, it, onChange, whitelistAction(it)));
+        bigSum.setText(show.size() + " 项   " + Util.fmtSize(total));
+        renderBatched(show, bigList, bigSum, 0);
     }
 
     private void sortList(List<JunkItem> l, String mode) {
@@ -247,9 +276,11 @@ public class FilesPage extends PageBase {
 
     private View dupCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "大小分桶 + 内容哈希精确比对，同组按策略保留一份"));
+        c.addView(UI.eyebrow(act, "重复文件"));
+        c.addView(UI.title(act, "内容比对"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "先按大小分桶再算内容哈希，同组按策略保留一份"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
-        dupPolicyLabel = UI.note(act, "当前策略：" + policyLabel(keepPolicy));
+        dupPolicyLabel = UI.data(act, "策略  " + policyLabel(keepPolicy), Theme.T_DATA_S, Theme.MUTED);
         c.addView(dupPolicyLabel, UI.lpm(act, UI.MP, UI.WC, 8));
 
         Button policy = UI.secondary(act, "保留策略");
@@ -260,7 +291,7 @@ public class FilesPage extends PageBase {
         scan.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { scanDup(); }
         });
-        dupSum = UI.note(act, "");
+        dupSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         c.addView(dupSum, UI.lpm(act, UI.MP, UI.WC, 8));
         dupList = UI.col(act);
         c.addView(dupList, UI.lpm(act, UI.MP, UI.WC, 4));
@@ -289,7 +320,7 @@ public class FilesPage extends PageBase {
             public void onClick(android.content.DialogInterface d, int w) {
                 keepPolicy = keys[w];
                 act.store.setKeepPolicy(keepPolicy);   // 持久化，重开仍生效
-                dupPolicyLabel.setText("当前策略：" + labels[w]);
+                dupPolicyLabel.setText("策略  " + labels[w]);
                 d.dismiss();
                 if (!dupGroups.isEmpty()) {
                     Finder.applyKeepPolicy(dupGroups, keepPolicy);
@@ -327,7 +358,7 @@ public class FilesPage extends PageBase {
         Runnable noop = new Runnable() { public void run() { updateDupSum(); } };
         for (Finder.DupGroup g : dupGroups) {
             LinearLayout box = UI.col(act);
-            box.setBackground(Theme.inner(act, 12));
+            box.setBackground(Theme.item(act, false));
             int p = Theme.dp(act, 10);
             box.setPadding(p, p, p, p);
 
@@ -397,12 +428,14 @@ public class FilesPage extends PageBase {
 
     private View emptyCard() {
         LinearLayout c = UI.card(act);
+        c.addView(UI.eyebrow(act, "空文件"));
+        c.addView(UI.title(act, "零字节与空目录"), UI.lpm(act, UI.MP, UI.WC, 2));
         c.addView(UI.switchRow(act, "包含空目录", "同时列出没有内容的文件夹", emptyDirs,
                 new android.widget.CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(android.widget.CompoundButton v, boolean on) { emptyDirs = on; }
         }));
 
-        emptySum = UI.note(act, "");
+        emptySum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         c.addView(emptySum, UI.lpm(act, UI.MP, UI.WC, 8));
         emptyList = UI.col(act);
         c.addView(emptyList, UI.lpm(act, UI.MP, UI.WC, 4));
@@ -411,10 +444,10 @@ public class FilesPage extends PageBase {
         scan.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { scanEmpty(); }
         });
-        Button selAll = UI.secondary(act, "全选");
+        Button selAll = UI.secondary(act, "反选");
         Button del = UI.danger(act, "清理选中");
         selAll.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { selectAll(emptyItems, emptyList, true); updateSum(emptyItems, emptySum); }
+            public void onClick(View v) { invertAll(emptyItems, emptyList); updateSum(emptyItems, emptySum); }
         });
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { removeItems(emptyItems, emptyList, emptySum, false); }
@@ -450,7 +483,9 @@ public class FilesPage extends PageBase {
 
     private View apkCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "标注是否已安装；已安装的 apk 可安全删除"));
+        c.addView(UI.eyebrow(act, "安装包"));
+        c.addView(UI.title(act, "APK 管理"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "标注是否已安装，已安装的 apk 可安全删除"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
         Button scan = UI.primary(act, "扫描");
         Button selIns = UI.secondary(act, "只选已安装");
@@ -463,8 +498,16 @@ public class FilesPage extends PageBase {
                 renderApk();
             }
         });
-        apkSum = UI.note(act, "");
-        c.addView(apkSum, UI.lpm(act, UI.MP, UI.WC, 8));
+        apkSearch = UI.search(act, "按名称过滤");
+        apkSearch.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(android.text.Editable e) { renderApk(); }
+        });
+        c.addView(apkSearch, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        apkSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(apkSum, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
         apkList = UI.col(act);
         c.addView(apkList, UI.lpm(act, UI.MP, UI.WC, 4));
 
@@ -496,16 +539,23 @@ public class FilesPage extends PageBase {
             apkList.addView(UI.empty(act, "未发现安装包"));
             return;
         }
+        String kw = apkSearch == null ? ""
+                : apkSearch.getText().toString().trim().toLowerCase(java.util.Locale.US);
+        List<Finder.ApkInfo> show = new ArrayList<Finder.ApkInfo>();
+        for (Finder.ApkInfo a : apkItems) {
+            if (!kw.isEmpty() && !a.label.toLowerCase(java.util.Locale.US).contains(kw)) continue;
+            show.add(a);
+        }
         long total = 0, insTotal = 0;
         int ins = 0;
-        for (Finder.ApkInfo a : apkItems) {
+        for (Finder.ApkInfo a : show) {
             total += a.size;
             if (a.installed) { ins++; insTotal += a.size; }
         }
-        apkSum.setText(apkItems.size() + " 个 · " + Util.fmtSize(total)
-                + " · 已装 " + ins + " 个（" + Util.fmtSize(insTotal) + " 可回收）");
+        apkSum.setText(show.size() + " 个   " + Util.fmtSize(total)
+                + "   已装 " + ins + " 个 / " + Util.fmtSize(insTotal) + " 可回收");
 
-        for (final Finder.ApkInfo a : apkItems) {
+        for (final Finder.ApkInfo a : show) {
             LinearLayout r = UI.row(act);
             r.setPadding(0, Theme.dp(act, 5), 0, Theme.dp(act, 5));
             CheckBox cb = UI.check(act, a.checked);
@@ -534,7 +584,9 @@ public class FilesPage extends PageBase {
 
     private View browseCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "浏览目录并手动删除任意文件或文件夹。重要目录会标记保护，不允许删除。"));
+        c.addView(UI.eyebrow(act, "文件清理"));
+        c.addView(UI.title(act, "目录浏览"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "手动删除任意文件或文件夹，重要目录标记保护且不可删除"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
         brPath = UI.text(act, "", 11.5f, Theme.ACCENT);
         brPath.setSingleLine(true);
@@ -549,14 +601,26 @@ public class FilesPage extends PageBase {
             }
         }));
 
-        brSum = UI.note(act, "");
-        c.addView(brSum, UI.lpm(act, UI.MP, UI.WC, 6));
+        brSearch = UI.search(act, "在当前目录过滤");
+        brSearch.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(android.text.Editable e) { renderBrowse(); }
+        });
+        c.addView(brSearch, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        brSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(brSum, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
         brList = UI.col(act);
         c.addView(brList, UI.lpm(act, UI.MP, UI.WC, 4));
 
         Button jump = UI.secondary(act, "快捷目录");
         Button up = UI.secondary(act, "上一级");
+        Button prot = UI.secondary(act, "保护清单");
         Button del = UI.danger(act, "删除选中");
+        prot.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { showProtected(); }
+        });
         jump.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { pickShortcut(); }
         });
@@ -570,10 +634,26 @@ public class FilesPage extends PageBase {
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { delBrowse(); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, jump, up, del), UI.lpm(act, UI.MP, UI.WC, 10));
+        c.addView(UI.btnRow(act, UI.BTN_H, jump, up, prot), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        c.addView(UI.btnRow(act, UI.BTN_H, del), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
 
         loadBrowse(Util.sdRoot());
         return c;
+    }
+
+    /** 保护路径清单：让用户看得见哪些目录不会被碰 */
+    private void showProtected() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("以下 ").append(Store.PROTECTED.length)
+          .append(" 个目录始终受保护，不会被扫描或清理：\n\n");
+        for (String p : Store.PROTECTED) {
+            File f = new File(Util.sdRoot() + "/" + p);
+            sb.append(f.isDirectory() ? "● " : "○ ").append(p);
+            if (f.isDirectory()) sb.append("   ").append(Util.fmtSize(Util.dirSize(f)));
+            sb.append('\n');
+        }
+        sb.append("\n● 本机存在   ○ 本机无此目录");
+        UI.info(act, "保护路径", sb.toString());
     }
 
     private void pickShortcut() {
@@ -618,8 +698,11 @@ public class FilesPage extends PageBase {
         brSum.setText(brItems.size() + " 项 · 合计 " + Util.fmtSize(total)
                 + "（点击文件夹进入，长按加入白名单）");
 
+        String kw = brSearch == null ? ""
+                : brSearch.getText().toString().trim().toLowerCase(java.util.Locale.US);
         int shown = 0;
         for (final Browser.Entry e : brItems) {
+            if (!kw.isEmpty() && !e.name.toLowerCase(java.util.Locale.US).contains(kw)) continue;
             if (++shown > 120) {
                 brList.addView(UI.note(act, "… 还有 " + (brItems.size() - 120) + " 项未显示"));
                 break;
@@ -713,7 +796,11 @@ public class FilesPage extends PageBase {
                                 String msg = "已处理 " + r.count + " 项 · "
                                         + Util.fmtSize(toTrash ? r.trashed : r.freed);
                                 act.toast(msg);
-                                if (!r.errors.isEmpty()) showErrors(r.errors);
+                                if (!r.errors.isEmpty()) {
+                                    offerRetry(r.errors, new Runnable() {
+                                        public void run() { loadBrowse(brCur); }
+                                    });
+                                }
                                 act.homePage().refreshDisk();
                                 loadBrowse(brCur);
                             }

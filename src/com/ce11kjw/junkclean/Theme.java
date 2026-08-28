@@ -2,65 +2,149 @@ package com.ce11kjw.junkclean;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.util.TypedValue;
+import android.view.animation.Interpolator;
+import android.view.animation.OvershootInterpolator;
+import android.view.animation.PathInterpolator;
 
-/** 深空玻璃：3 主题 × 4 强调色；壁纸开启时卡片转为真半透明玻璃 */
+/**
+ * 设计令牌：Instrument（精密仪器）方向。
+ *
+ * 底色用带蓝紫底调的石墨而非纯黑 —— 纯黑会让半透明玻璃叠上去发灰，
+ * 石墨底才有色彩可以透过来。强调色只用于数据读数与激活态，
+ * 其余全部灰阶，让每一处彩色都带信息量。
+ */
 public final class Theme {
 
-    public static int BG       = 0xFF050509;
-    public static int BG2      = 0xFF0A0A13;
-    public static int SURFACE  = 0xFF12121C;
-    public static int SURFACE2 = 0xFF1A1A26;
-    public static int LINE     = 0xFF22222E;
-    public static int LINE2    = 0xFF2E2E3C;
-    public static int TEXT     = 0xFFF2F2F7;
-    public static int MUTED    = 0xFFB8B8C4;
-    public static int DIM      = 0xFF6E6E7C;
+    // ---------- 色彩 ----------
+    public static int VOID     = 0xFF08090F;   // 最底层
+    public static int BG       = 0xFF0E1018;   // 页面底
+    public static int PANEL    = 0xFF161A26;   // 卡片外壳
+    public static int GLASS    = 0xFF1E2333;   // 卡片内芯
+    public static int SURFACE2 = 0xFF252B3D;   // 列表项 / 次级按钮
+    public static int HAIRLINE = 0x1AFFFFFF;   // 外壳发丝边
+    public static int EDGE     = 0x38FFFFFF;   // 内芯高光边
+
+    public static int TEXT     = 0xFFF4F5FA;
+    public static int MUTED    = 0xFFA8AEC2;
+    public static int DIM      = 0xFF6B7288;
+
     public static int ACCENT   = 0xFF2DD4A7;
-    public static int ACCENT_D = 0xFF059669;
-    public static int ACCENT2  = 0xFF7C5CFF;
-    public static int WARN     = 0xFFFBBF24;
-    public static int DANGER   = 0xFFFB7185;
+    public static int ACCENT_D = 0xFF0F9E78;
+    public static int ACCENT_L = 0xFF6FF0CB;
+    public static int WARN     = 0xFFF5A524;
+    public static int DANGER   = 0xFFF3576B;
 
     public static boolean light = false;
-    /** 壁纸启用时为 true：卡片走半透明玻璃，让背景透出来 */
+    /** 壁纸启用时为 true：面板转半透明玻璃 */
     public static boolean glass = false;
+
+    // ---------- 字号（8 档，最大 32sp） ----------
+    public static final float T_DISPLAY  = 32f;
+    public static final float T_TITLE    = 21f;
+    public static final float T_HEAD     = 16.5f;
+    public static final float T_BODY     = 13.5f;
+    public static final float T_BODY_S   = 12.5f;
+    public static final float T_DATA     = 13f;
+    public static final float T_DATA_S   = 11.5f;
+    public static final float T_MICRO    = 9.5f;
+
+    // ---------- 间距（4pt 基准） ----------
+    public static final int S1 = 4,  S2 = 8,  S3 = 12, S4 = 16;
+    public static final int S5 = 24, S6 = 32, S7 = 48, S8 = 64;
+
+    // ---------- 圆角（同心） ----------
+    public static final int R_SHELL = 28;
+    public static final int R_CORE  = 22;   // R_SHELL - 内边距 6
+    public static final int R_ITEM  = 14;
+    public static final int R_PILL  = 999;
+    public static final int SHELL_PAD = 6;
+
+    // ---------- 动效曲线 ----------
+    private static Interpolator STANDARD, PRESS, DECEL;
+    private static Interpolator SPRING;
+
+    public static Interpolator standard() {
+        if (STANDARD == null) STANDARD = new PathInterpolator(0.32f, 0.72f, 0f, 1f);
+        return STANDARD;
+    }
+    public static Interpolator press() {
+        if (PRESS == null) PRESS = new PathInterpolator(0.2f, 0f, 0f, 1f);
+        return PRESS;
+    }
+    public static Interpolator decel() {
+        if (DECEL == null) DECEL = new PathInterpolator(0.05f, 0.7f, 0.1f, 1f);
+        return DECEL;
+    }
+    public static Interpolator spring() {
+        if (SPRING == null) SPRING = new OvershootInterpolator(0.9f);
+        return SPRING;
+    }
+
+    // ---------- 字型（4 个角色，全部系统族，零体积成本） ----------
+    private static Typeface DISPLAY, DATA, BODY, MICRO;
+
+    /** 大标题与数字读数：细体 + 负字距 */
+    public static Typeface display() {
+        if (DISPLAY == null) DISPLAY = Typeface.create("sans-serif-light", Typeface.NORMAL);
+        return DISPLAY;
+    }
+    /** 所有字节数、百分比、路径、计数 —— 等宽保证多行数字垂直对齐 */
+    public static Typeface data() {
+        if (DATA == null) DATA = Typeface.create("monospace", Typeface.NORMAL);
+        return DATA;
+    }
+    public static Typeface body() {
+        if (BODY == null) BODY = Typeface.create("sans-serif", Typeface.NORMAL);
+        return BODY;
+    }
+    /** 分区标签、徽章：中等字重 + 大字距 + 全大写 */
+    public static Typeface micro() {
+        if (MICRO == null) MICRO = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+        return MICRO;
+    }
 
     private Theme() {}
 
     public static void apply(String theme, String accent) {
         if ("oled".equals(theme)) {
-            BG = 0xFF000000; BG2 = 0xFF000000;
-            SURFACE = 0xFF0B0B0F; SURFACE2 = 0xFF13131A;
-            LINE = 0xFF1A1A22; LINE2 = 0xFF262630;
-            TEXT = 0xFFF2F2F7; MUTED = 0xFFB0B0BC; DIM = 0xFF66666F;
+            VOID = 0xFF000000; BG = 0xFF000000;
+            PANEL = 0xFF0B0D14; GLASS = 0xFF12151F; SURFACE2 = 0xFF191D28;
+            HAIRLINE = 0x14FFFFFF; EDGE = 0x2EFFFFFF;
+            TEXT = 0xFFF4F5FA; MUTED = 0xFF9FA5B8; DIM = 0xFF62687C;
             light = false;
         } else if ("light".equals(theme)) {
-            BG = 0xFFF4F5F9; BG2 = 0xFFFFFFFF;
-            SURFACE = 0xFFFFFFFF; SURFACE2 = 0xFFEDEEF3;
-            LINE = 0xFFDFE0E8; LINE2 = 0xFFC9CAD4;
-            TEXT = 0xFF15151C; MUTED = 0xFF5A5A66; DIM = 0xFF8E8E9A;
+            VOID = 0xFFEDEFF5; BG = 0xFFF2F3F7;
+            PANEL = 0xFFE7E9F0; GLASS = 0xFFFFFFFF; SURFACE2 = 0xFFF0F1F6;
+            HAIRLINE = 0x14000000; EDGE = 0x0F000000;
+            TEXT = 0xFF12141C; MUTED = 0xFF565D70; DIM = 0xFF8A90A2;
             light = true;
         } else {
-            BG = 0xFF050509; BG2 = 0xFF0A0A13;
-            SURFACE = 0xFF12121C; SURFACE2 = 0xFF1A1A26;
-            LINE = 0xFF22222E; LINE2 = 0xFF2E2E3C;
-            TEXT = 0xFFF2F2F7; MUTED = 0xFFB8B8C4; DIM = 0xFF6E6E7C;
+            VOID = 0xFF08090F; BG = 0xFF0E1018;
+            PANEL = 0xFF161A26; GLASS = 0xFF1E2333; SURFACE2 = 0xFF252B3D;
+            HAIRLINE = 0x1AFFFFFF; EDGE = 0x38FFFFFF;
+            TEXT = 0xFFF4F5FA; MUTED = 0xFFA8AEC2; DIM = 0xFF6B7288;
             light = false;
         }
 
         if ("violet".equals(accent)) {
-            ACCENT = 0xFF7C5CFF; ACCENT_D = 0xFF5C3EFF; ACCENT2 = 0xFFB57CFF;
+            ACCENT = 0xFF8B7CFF; ACCENT_D = 0xFF5B48E0; ACCENT_L = 0xFFB9AEFF;
         } else if ("blue".equals(accent)) {
-            ACCENT = 0xFF4A9EFF; ACCENT_D = 0xFF2563EB; ACCENT2 = 0xFF7CC4FF;
+            ACCENT = 0xFF4A9EFF; ACCENT_D = 0xFF1F6FD4; ACCENT_L = 0xFF8FC6FF;
         } else if ("pink".equals(accent)) {
-            ACCENT = 0xFFFF7EB6; ACCENT_D = 0xFFFF5C8A; ACCENT2 = 0xFFFFB0D0;
+            ACCENT = 0xFFFF7EA8; ACCENT_D = 0xFFE04E80; ACCENT_L = 0xFFFFB0C8;
         } else {
-            ACCENT = light ? 0xFF14B88F : 0xFF2DD4A7;
-            ACCENT_D = 0xFF059669; ACCENT2 = 0xFF7C5CFF;
+            ACCENT = light ? 0xFF0FA37E : 0xFF2DD4A7;
+            ACCENT_D = 0xFF0F9E78; ACCENT_L = 0xFF6FF0CB;
+        }
+        if (light) {
+            WARN = 0xFFC97A05; DANGER = 0xFFD93A50;
+        } else {
+            WARN = 0xFFF5A524; DANGER = 0xFFF3576B;
         }
     }
 
@@ -68,122 +152,136 @@ public final class Theme {
         return (color & 0x00FFFFFF) | (a << 24);
     }
 
+    /** 两色按比例混合，t=0 取 a，t=1 取 b */
+    public static int mix(int a, int b, float t) {
+        int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+        int br = (b >> 16) & 0xFF, bg = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return 0xFF000000
+                | ((int) (ar + (br - ar) * t) << 16)
+                | ((int) (ag + (bg - ag) * t) << 8)
+                | (int) (ab + (bb - ab) * t);
+    }
+
     public static int dp(Context c, float v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v,
                 c.getResources().getDisplayMetrics());
     }
 
-    /**
-     * 玻璃卡片：无壁纸时用实色 SURFACE；有壁纸时用低透明度 + 顶部高光渐变，
-     * 让下层模糊壁纸透出来形成拟态玻璃。
-     */
-    public static Drawable card(Context c, float radiusDp) {
-        float r = dp(c, radiusDp);
-        if (!glass) {
-            GradientDrawable g = new GradientDrawable();
-            g.setCornerRadius(r);
-            g.setColor(SURFACE);
-            g.setStroke(dp(c, 1), LINE);
-            return g;
-        }
+    // ---------- 容器：双层机加工外壳 ----------
 
-        // 底层：极低不透明度的冷色填充。之前用 0x8A 的近黑色，叠在压暗的壁纸上
-        // 就变成一片灰；降到 0x4E 并偏蓝，壁纸色彩才能透上来。
+    /** 外壳：铝合金托盘。半透明底 + 发丝外边 */
+    public static Drawable shell(Context c) {
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(c, R_SHELL));
+        g.setColor(glass ? alpha(light ? 0xFFFFFF : 0x10131E, light ? 0x5E : 0x6E) : PANEL);
+        g.setStroke(Math.max(1, dp(c, 0.8f)), glass ? alpha(0xFFFFFF, light ? 0x9E : 0x22) : HAIRLINE);
+        return g;
+    }
+
+    /** 内芯：嵌进托盘的玻璃面板。顶部内高光是「嵌入感」的来源 */
+    public static Drawable core(Context c) {
+        float r = dp(c, R_CORE);
         GradientDrawable base = new GradientDrawable();
         base.setCornerRadius(r);
-        base.setColor(light ? alpha(0xFFFFFF, 0x6E) : alpha(0x1C1C2E, 0x4E));
-        base.setStroke(dp(c, 1), light ? alpha(0xFFFFFF, 0xC8) : alpha(0xFFFFFF, 0x38));
-
-        // 上层：斜向高光，从左上白到右下透明，比纯垂直渐变更像玻璃
+        if (glass) {
+            base.setColor(alpha(light ? 0xFFFFFF : 0x1E2333, light ? 0xC8 : 0x66));
+            base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0xD2 : 0x30));
+        } else {
+            base.setColor(GLASS);
+            base.setStroke(Math.max(1, dp(c, 0.8f)), EDGE);
+        }
         GradientDrawable gloss = new GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                new int[]{light ? alpha(0xFFFFFF, 0x78) : alpha(0xFFFFFF, 0x30),
-                          alpha(0xFFFFFF, 0x08),
+                new int[]{alpha(0xFFFFFF, light ? 0x00 : 0x1C),
+                          alpha(0xFFFFFF, 0x06),
                           alpha(0xFFFFFF, 0x00)});
         gloss.setCornerRadius(r);
-
         return new LayerDrawable(new Drawable[]{base, gloss});
     }
 
-    /** 内层小容器（列表项、规则块） */
-    public static Drawable inner(Context c, float radiusDp) {
-        float r = dp(c, radiusDp);
+    /** 列表项 / 内层小容器 */
+    public static Drawable item(Context c, boolean pressed) {
         GradientDrawable g = new GradientDrawable();
-        g.setCornerRadius(r);
-        if (glass) {
-            g.setColor(light ? alpha(0xFFFFFF, 0x5A) : alpha(0xFFFFFF, 0x14));
-            g.setStroke(dp(c, 1), light ? alpha(0x000000, 0x12) : alpha(0xFFFFFF, 0x22));
+        g.setCornerRadius(dp(c, R_ITEM));
+        if (pressed) {
+            g.setColor(alpha(light ? 0x000000 : 0xFFFFFF, light ? 0x0E : 0x16));
         } else {
-            g.setColor(SURFACE2);
-            g.setStroke(dp(c, 1), LINE);
+            g.setColor(glass ? alpha(light ? 0xFFFFFF : 0xFFFFFF, light ? 0x8A : 0x0A) : SURFACE2);
         }
         return g;
     }
 
-    public static GradientDrawable primaryBtn(Context c) {
+    // ---------- 按钮 ----------
+
+    public static Drawable primaryBtn(Context c) {
         GradientDrawable g = new GradientDrawable(
                 GradientDrawable.Orientation.TL_BR, new int[]{ACCENT, ACCENT_D});
-        g.setCornerRadius(dp(c, 99));
+        g.setCornerRadius(dp(c, R_PILL));
         return g;
     }
 
-    public static GradientDrawable dangerBtn(Context c) {
+    public static Drawable dangerBtn(Context c) {
         GradientDrawable g = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR, new int[]{DANGER, 0xFFE11D48});
-        g.setCornerRadius(dp(c, 99));
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{DANGER, mix(DANGER, 0xFF000000, 0.28f)});
+        g.setCornerRadius(dp(c, R_PILL));
         return g;
     }
 
-    public static GradientDrawable secondaryBtn(Context c) {
+    public static Drawable ghostBtn(Context c) {
         GradientDrawable g = new GradientDrawable();
-        g.setCornerRadius(dp(c, 99));
-        if (glass) {
-            g.setColor(light ? alpha(0xFFFFFF, 0x82) : alpha(0xFFFFFF, 0x1A));
-            g.setStroke(dp(c, 1), light ? alpha(0x000000, 0x18) : alpha(0xFFFFFF, 0x3A));
-        } else {
-            g.setColor(SURFACE2);
-            g.setStroke(dp(c, 1), LINE2);
-        }
+        g.setCornerRadius(dp(c, R_PILL));
+        g.setColor(glass ? alpha(0xFFFFFF, light ? 0x8A : 0x12) : SURFACE2);
+        g.setStroke(Math.max(1, dp(c, 0.8f)),
+                glass ? alpha(0xFFFFFF, light ? 0x00 : 0x2A) : alpha(0xFFFFFF, light ? 0x00 : 0x1E));
         return g;
     }
 
-    public static GradientDrawable badge(Context c, int fill) {
+    /** 按钮内嵌的圆形图标容器 */
+    public static Drawable iconWell(Context c, boolean onAccent) {
         GradientDrawable g = new GradientDrawable();
-        g.setCornerRadius(dp(c, 99));
+        g.setCornerRadius(dp(c, R_PILL));
+        g.setColor(onAccent ? alpha(0xFF000000, 0x24) : alpha(0xFFFFFF, 0x14));
+        return g;
+    }
+
+    public static Drawable badge(Context c, int fill) {
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(c, R_PILL));
         g.setColor(fill);
         return g;
     }
 
-    /** 对话框容器：玻璃模式下半透明 + 高光，否则实色卡片 */
+    /** 对话框：外壳同款但更实，避免文字压在壁纸上 */
     public static Drawable dialog(Context c) {
-        float r = dp(c, 22);
-        if (!glass) {
-            GradientDrawable g = new GradientDrawable();
-            g.setCornerRadius(r);
-            g.setColor(light ? 0xFFFFFFFF : 0xFF15151F);
-            g.setStroke(dp(c, 1), LINE2);
-            return g;
-        }
+        float r = dp(c, R_SHELL);
         GradientDrawable base = new GradientDrawable();
         base.setCornerRadius(r);
-        base.setColor(light ? alpha(0xFFFFFF, 0xEE) : alpha(0x1A1A2C, 0xE6));
-        base.setStroke(dp(c, 1), light ? alpha(0x000000, 0x1E) : alpha(0xFFFFFF, 0x3E));
+        base.setColor(glass ? alpha(light ? 0xFFFFFF : 0x171B27, light ? 0xF4 : 0xEE)
+                            : (light ? 0xFFFFFFFF : 0xFF171B27));
+        base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0x00 : 0x3A));
         GradientDrawable gloss = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{light ? alpha(0xFFFFFF, 0x70) : alpha(0xFFFFFF, 0x22),
-                          alpha(0xFFFFFF, 0x00)});
+                new int[]{alpha(0xFFFFFF, light ? 0x00 : 0x18), alpha(0xFFFFFF, 0x00)});
         gloss.setCornerRadius(r);
         return new LayerDrawable(new Drawable[]{base, gloss});
     }
 
-    /** 底部导航容器 */
+    /** 底部导航：浮空玻璃条 */
     public static Drawable navBar(Context c) {
         GradientDrawable g = new GradientDrawable();
-        if (glass) {
-            g.setColor(light ? alpha(0xFFFFFF, 0xCC) : alpha(0x0C0C18, 0xB4));
-        } else {
-            g.setColor(BG2);
-        }
+        g.setCornerRadius(dp(c, R_PILL));
+        g.setColor(glass ? alpha(light ? 0xFFFFFF : 0x0C0F18, light ? 0xE0 : 0xD8)
+                         : (light ? 0xFFE7E9F0 : 0xFF141824));
+        g.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0x00 : 0x1E));
+        return g;
+    }
+
+    /** 导航激活态药丸 */
+    public static Drawable navPill(Context c) {
+        GradientDrawable g = new GradientDrawable();
+        g.setCornerRadius(dp(c, R_PILL));
+        g.setColor(alpha(ACCENT, 0x26));
         return g;
     }
 }

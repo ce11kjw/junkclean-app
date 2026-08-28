@@ -28,7 +28,8 @@ public class ToolsPage extends PageBase {
     private final List<JunkItem> thumbItems = new ArrayList<JunkItem>();
 
     // 整理中心
-    private EditText orgSrcInput;
+    private EditText orgSrcInput, appSearch;
+    private String trashSort = "new";
     private LinearLayout ruleBox;
     private TextView orgSum;
 
@@ -46,20 +47,27 @@ public class ToolsPage extends PageBase {
     public View view() {
         if (scroll != null) return scroll;
         LinearLayout root = UI.col(act);
-        int p = Theme.dp(act, 14);
-        root.setPadding(p, p, p, p);
+        int p = Theme.dp(act, Theme.S4);
+        root.setPadding(p, Theme.dp(act, Theme.S5), p, p);
+
+        LinearLayout head = UI.col(act);
+        head.addView(UI.eyebrow(act, "维护"));
+        TextView ht = UI.display(act, "工具箱", Theme.T_TITLE, Theme.TEXT);
+        ht.setTypeface(Theme.display(), android.graphics.Typeface.BOLD);
+        head.addView(ht, UI.lpm(act, UI.WC, UI.WC, 2));
+        root.addView(head);
 
         root.addView(UI.section(act, "应用缓存"));
-        root.addView(appCard());
+        root.addView(appCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "缩略图缓存"));
-        root.addView(thumbCard());
+        root.addView(thumbCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "整理中心"));
-        root.addView(organizeCard());
+        root.addView(organizeCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "回收站"));
-        root.addView(trashCard());
+        root.addView(trashCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "存储优化"));
-        root.addView(trimCard());
-        root.addView(UI.spacer(act, 24));
+        root.addView(trimCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        root.addView(UI.spacer(act, Theme.S8));
 
         scroll = new ScrollView(act);
         scroll.setVerticalScrollBarEnabled(false);
@@ -71,9 +79,11 @@ public class ToolsPage extends PageBase {
 
     private View appCard() {
         LinearLayout c = UI.card(act);
+        c.addView(UI.eyebrow(act, "应用缓存"));
+        c.addView(UI.title(act, Shell.hasRoot() ? "深度清理" : "受限清理"), UI.lpm(act, UI.MP, UI.WC, 2));
         c.addView(UI.note(act, Shell.hasRoot()
-                ? "root 模式：可清理所有应用的内部缓存"
-                : "无 root：仅可清理 Android/data 下的外部缓存"));
+                ? "可清理所有应用的内部缓存目录"
+                : "无 root，仅能处理 Android/data 下的外部缓存"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
         Button scan = UI.primary(act, "扫描");
         Button selAll = UI.secondary(act, "全选");
@@ -89,8 +99,16 @@ public class ToolsPage extends PageBase {
         });
         c.addView(UI.btnRow(act, UI.BTN_H, scan, selAll, none), UI.lpm(act, UI.MP, UI.WC, 8));
 
-        appSum = UI.note(act, "");
-        c.addView(appSum, UI.lpm(act, UI.MP, UI.WC, 8));
+        appSearch = UI.search(act, "按应用名过滤");
+        appSearch.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(android.text.Editable e) { renderApps(); }
+        });
+        c.addView(appSearch, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        appSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(appSum, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
         appList = UI.col(act);
         c.addView(appList, UI.lpm(act, UI.MP, UI.WC, 4));
 
@@ -122,12 +140,24 @@ public class ToolsPage extends PageBase {
             appList.addView(UI.empty(act, "未发现明显的应用缓存"));
             return;
         }
+        String kw = appSearch == null ? ""
+                : appSearch.getText().toString().trim().toLowerCase(java.util.Locale.US);
+        List<Finder.AppCache> show = new ArrayList<Finder.AppCache>();
+        for (Finder.AppCache a : appItems) {
+            if (!kw.isEmpty() && !a.label.toLowerCase(java.util.Locale.US).contains(kw)) continue;
+            show.add(a);
+        }
+        if (show.isEmpty()) {
+            appSum.setText("");
+            appList.addView(UI.empty(act, "没有匹配「" + kw + "」的应用"));
+            return;
+        }
         long total = 0;
-        for (Finder.AppCache a : appItems) total += a.size;
-        appSum.setText(appItems.size() + " 个应用 · 合计 " + Util.fmtSize(total));
+        for (Finder.AppCache a : show) total += a.size;
+        appSum.setText(show.size() + " 个应用   " + Util.fmtSize(total));
 
-        long max = appItems.get(0).size;
-        for (final Finder.AppCache a : appItems) {
+        long max = show.get(0).size;
+        for (final Finder.AppCache a : show) {
             LinearLayout r = UI.row(act);
             r.setPadding(0, Theme.dp(act, 5), 0, Theme.dp(act, 5));
             CheckBox cb = UI.check(act, a.checked);
@@ -141,14 +171,14 @@ public class ToolsPage extends PageBase {
             nm.setSingleLine(true);
             nm.setEllipsize(android.text.TextUtils.TruncateAt.END);
             info.addView(nm);
-            StorageBarView b = new StorageBarView(act);
+            SegmentGauge b = new SegmentGauge(act, true);
             b.setPercent(max > 0 ? a.size * 100f / max : 0);
             info.addView(b, UI.lpm(act, UI.MP, Theme.dp(act, 6), 3));
             LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(0, UI.WC, 1f);
             ip.leftMargin = Theme.dp(act, 6);
             ip.rightMargin = Theme.dp(act, 8);
             r.addView(info, ip);
-            r.addView(UI.text(act, Util.fmtSize(a.size), 11.5f, Theme.ACCENT));
+            r.addView(UI.data(act, Util.fmtSize(a.size), Theme.T_DATA_S, Theme.ACCENT));
 
             r.setOnLongClickListener(new View.OnLongClickListener() {
                 public boolean onLongClick(View v) {
@@ -202,9 +232,11 @@ public class ToolsPage extends PageBase {
 
     private View thumbCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "相册与图库的预览缓存，删除后浏览时会自动重建"));
+        c.addView(UI.eyebrow(act, "缩略图"));
+        c.addView(UI.title(act, "预览缓存"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "相册与图库的预览图，删除后浏览时自动重建"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
-        thumbSum = UI.note(act, "");
+        thumbSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         c.addView(thumbSum, UI.lpm(act, UI.MP, UI.WC, 8));
         thumbList = UI.col(act);
         c.addView(thumbList, UI.lpm(act, UI.MP, UI.WC, 4));
@@ -248,7 +280,9 @@ public class ToolsPage extends PageBase {
 
     private View organizeCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "按扩展名把散落文件归档到分类目录。源目录统一，规则只定义去向。"));
+        c.addView(UI.eyebrow(act, "整理中心"));
+        c.addView(UI.title(act, "按类型归档"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "源目录统一，每条规则只定义去向"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
         c.addView(UI.h2(act, "统一源目录"), UI.lpm(act, UI.MP, UI.WC, 10));
         orgSrcInput = UI.input(act, Util.sdRoot() + "/Download", act.store.orgSrc());
@@ -288,7 +322,7 @@ public class ToolsPage extends PageBase {
         });
         c.addView(UI.btnRow(act, UI.BTN_H, addRule, editMap, hist), UI.lpm(act, UI.MP, UI.WC, 10));
 
-        orgSum = UI.note(act, "");
+        orgSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         c.addView(orgSum, UI.lpm(act, UI.MP, UI.WC, 8));
         return c;
     }
@@ -307,7 +341,7 @@ public class ToolsPage extends PageBase {
             if (r == null) continue;
 
             LinearLayout box = UI.col(act);
-            box.setBackground(Theme.inner(act, 12));
+            box.setBackground(Theme.item(act, false));
             int p = Theme.dp(act, 10);
             box.setPadding(p, p, p, p);
 
@@ -508,11 +542,17 @@ public class ToolsPage extends PageBase {
 
     private View trashCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "清理时移入的文件暂存于此，可恢复到原位"));
+        c.addView(UI.eyebrow(act, "回收站"));
+        c.addView(UI.title(act, "已删除项目"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "清理时移入的文件暂存在这里，可恢复到原位"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
         Button load = UI.primary(act, "刷新");
+        Button sortBtn = UI.secondary(act, "排序");
         Button restore = UI.secondary(act, "恢复选中");
         Button del = UI.danger(act, "彻底删除");
+        sortBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { pickTrashSort(); }
+        });
         load.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { loadTrash(); }
         });
@@ -522,10 +562,11 @@ public class ToolsPage extends PageBase {
         del.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { deleteTrash(); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, load, restore, del), UI.lpm(act, UI.MP, UI.WC, 8));
+        c.addView(UI.btnRow(act, UI.BTN_H, load, sortBtn), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        c.addView(UI.btnRow(act, UI.BTN_H, restore, del), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
 
-        trashSum = UI.note(act, "");
-        c.addView(trashSum, UI.lpm(act, UI.MP, UI.WC, 8));
+        trashSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(trashSum, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
         trashList = UI.col(act);
         c.addView(trashList, UI.lpm(act, UI.MP, UI.WC, 4));
 
@@ -538,6 +579,44 @@ public class ToolsPage extends PageBase {
         });
         c.addView(UI.btnRow(act, UI.BTN_H, empty), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
+    }
+
+    private void pickTrashSort() {
+        final String[] labels = {"时间从新到旧", "时间从旧到新", "体积从大到小", "名称"};
+        final String[] keys = {"new", "old", "size", "name"};
+        int cur = 0;
+        for (int i = 0; i < keys.length; i++) if (keys[i].equals(trashSort)) cur = i;
+        UI.pick(act, "回收站排序", labels, cur,
+                new android.content.DialogInterface.OnClickListener() {
+            public void onClick(android.content.DialogInterface d, int w) {
+                trashSort = keys[w];
+                renderTrash();
+            }
+        });
+    }
+
+    private void sortTrash(List<Trash.Item> list) {
+        java.util.Comparator<Trash.Item> cmp;
+        if ("old".equals(trashSort)) {
+            cmp = new java.util.Comparator<Trash.Item>() {
+                public int compare(Trash.Item a, Trash.Item b) { return Long.compare(a.time, b.time); }
+            };
+        } else if ("size".equals(trashSort)) {
+            cmp = new java.util.Comparator<Trash.Item>() {
+                public int compare(Trash.Item a, Trash.Item b) { return Long.compare(b.size, a.size); }
+            };
+        } else if ("name".equals(trashSort)) {
+            cmp = new java.util.Comparator<Trash.Item>() {
+                public int compare(Trash.Item a, Trash.Item b) {
+                    return new File(a.orig).getName().compareToIgnoreCase(new File(b.orig).getName());
+                }
+            };
+        } else {
+            cmp = new java.util.Comparator<Trash.Item>() {
+                public int compare(Trash.Item a, Trash.Item b) { return Long.compare(b.time, a.time); }
+            };
+        }
+        java.util.Collections.sort(list, cmp);
     }
 
     private void loadTrash() {
@@ -560,7 +639,8 @@ public class ToolsPage extends PageBase {
             trashList.addView(UI.empty(act, "回收站为空"));
             return;
         }
-        trashSum.setText(trashItems.size() + " 项 · 占用 " + Util.fmtSize(Trash.totalSize(trashItems)));
+        sortTrash(trashItems);
+        trashSum.setText(trashItems.size() + " 项   " + Util.fmtSize(Trash.totalSize(trashItems)));
         for (final Trash.Item it : trashItems) {
             LinearLayout r = UI.row(act);
             r.setPadding(0, Theme.dp(act, 5), 0, Theme.dp(act, 5));
@@ -584,7 +664,7 @@ public class ToolsPage extends PageBase {
                         it.left <= 1 ? Theme.DANGER : Theme.WARN,
                         Theme.alpha(it.left <= 1 ? Theme.DANGER : Theme.WARN, 0x22)));
             }
-            TextView sz = UI.text(act, Util.fmtSize(it.size), 11.5f, Theme.DIM);
+            TextView sz = UI.data(act, Util.fmtSize(it.size), Theme.T_DATA_S, Theme.DIM);
             LinearLayout.LayoutParams sp = UI.lp(UI.WC, UI.WC);
             sp.leftMargin = Theme.dp(act, 6);
             r.addView(sz, sp);
@@ -670,9 +750,11 @@ public class ToolsPage extends PageBase {
 
     private View trimCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "对分区执行 TRIM，回收闪存已删除块，可改善写入性能（需 root）"));
+        c.addView(UI.eyebrow(act, "存储优化"));
+        c.addView(UI.title(act, "fstrim"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "对分区执行 TRIM，回收闪存已删除块，改善写入性能（需 root）"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
-        trimResult = UI.note(act, "");
+        trimResult = UI.data(act, "", Theme.T_DATA_S, Theme.MUTED);
         final String[] mounts = {"/data", "/cache", "/system"};
         Button[] bs = new Button[mounts.length];
         for (int i = 0; i < mounts.length; i++) {

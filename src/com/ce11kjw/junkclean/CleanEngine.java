@@ -13,6 +13,8 @@ public class CleanEngine {
         public int count;
         public int toTrash;
         public List<String> errors = new ArrayList<String>();
+        /** catId → [释放字节, 项数] */
+        public java.util.Map<String, long[]> catFreed = new java.util.HashMap<String, long[]>();
 
         /** 用于统计展示：入回收站的不计入释放量 */
         public long realFreed() { return freed; }
@@ -27,15 +29,20 @@ public class CleanEngine {
         this.useTrash = useTrash;
     }
 
-    /** 清理已勾选的分类项 */
+    /** 清理已勾选的分类项。同时按分类记账，供统计页展示占比 */
     public Result clean(List<JunkCategory> cats) {
         Result r = new Result();
         StringBuilder batch = new StringBuilder();
         for (JunkCategory c : cats) {
+            long before = r.freed + r.trashed;
+            int cntBefore = r.count;
             for (JunkItem it : c.items) {
                 if (!it.checked) continue;
                 step(it.path, it.size, r, batch, c.needRoot);
             }
+            long delta = (r.freed + r.trashed) - before;
+            int cnt = r.count - cntBefore;
+            if (cnt > 0) r.catFreed.put(c.id, new long[]{delta, cnt});
         }
         flush(batch, r);
         return r;

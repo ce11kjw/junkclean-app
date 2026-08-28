@@ -34,9 +34,29 @@ public final class Util {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(ms));
     }
 
+    /**
+     * 目录体积缓存。同一目录在一次会话里可能被多处反复统计
+     * （分类扫描、排行、浏览各算一遍），缓存能省掉大量重复递归。
+     */
+    private static final java.util.Map<String, long[]> sizeCache =
+            java.util.Collections.synchronizedMap(new java.util.HashMap<String, long[]>());
+    private static final long CACHE_TTL = 30000;
+
+    public static void clearSizeCache() {
+        sizeCache.clear();
+    }
+
     /** 递归目录体积（不跟随符号链接，限制深度防止栈溢出） */
     public static long dirSize(File d) {
-        return dirSize(d, 0);
+        if (d == null) return 0;
+        if (d.isFile()) return d.length();
+        String key = d.getAbsolutePath();
+        long now = System.currentTimeMillis();
+        long[] hit = sizeCache.get(key);
+        if (hit != null && now - hit[1] < CACHE_TTL) return hit[0];
+        long v = dirSize(d, 0);
+        sizeCache.put(key, new long[]{v, now});
+        return v;
     }
 
     private static final int MAX_DEPTH = 24;

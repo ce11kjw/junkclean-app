@@ -15,7 +15,10 @@ import java.util.Set;
 public class ScanEngine {
 
     public interface Progress {
-        void onCategory(String name, int index, int total);
+        /** foundItems / foundBytes 是截至此刻的累计发现量 */
+        void onCategory(String name, int index, int total, int foundItems, long foundBytes);
+        /** 返回 true 时中止后续分类扫描 */
+        boolean cancelled();
     }
 
     private static List<JunkCategory> cache;
@@ -34,7 +37,10 @@ public class ScanEngine {
         this.whitelist = store.whitelist();
     }
 
-    public static void invalidate() { cache = null; }
+    public static void invalidate() {
+        cache = null;
+        Util.clearSizeCache();
+    }
 
     public static boolean hasCache() {
         return cache != null && System.currentTimeMillis() - cacheTime < CACHE_TTL;
@@ -56,36 +62,80 @@ public class ScanEngine {
                 {"syscache",  "系统缓存",  "dalvik / 字体 / 包管理器缓存（全盘模式）", "⚙", "1", "1"},
         };
 
-        int total = defs.length;
-        for (int i = 0; i < defs.length; i++) {
-            String[] d = defs[i];
+        final List<JunkCategory> pending = new ArrayList<JunkCategory>();
+        for (String[] d : defs) {
             if (!store.catEnabled(d[0])) continue;
-            JunkCategory c = new JunkCategory(d[0], d[1], d[2], d[3],
-                    "1".equals(d[4]), "1".equals(d[5]));
-            if (cb != null) cb.onCategory(c.name, i + 1, total);
-            if (c.needRoot && !root) { cats.add(c); continue; }
-
-            if ("cache".equals(c.id))          scanAppCache(c);
-            else if ("webview".equals(c.id))   scanWebView(c);
-            else if ("log".equals(c.id))       scanLogs(c);
-            else if ("temp".equals(c.id))      scanTemp(c);
-            else if ("thumb".equals(c.id))     scanThumbs(c);
-            else if ("apkjunk".equals(c.id))   scanApkJunk(c);
-            else if ("emptyjunk".equals(c.id)) scanEmpty(c);
-            else if ("residue".equals(c.id))   scanResidue(c);
-            else if ("syscache".equals(c.id))  scanSysCache(c);
-
-            cats.add(c);
+            pending.add(new JunkCategory(d[0], d[1], d[2], d[3],
+                    "1".equals(d[4]), "1".equals(d[5])));
         }
 
-        cache = cats;
-        cacheTime = System.currentTimeMillis();
+        // 并发扫描：各分类互不依赖，串行在全盘模式下慢到无法接受。
+        // Semaphore 限制同时 4 个，避免大量并发 IO 反而互相拖慢。
+        final int total = pending.size();
+        final java.util.concurrent.atomic.AtomicInteger done =
+                new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.CountDownLatch latch =
+                new java.util.concurrent.CountDownLatch(total);
+        final java.util.concurrent.Semaphore gate =
+                new java.util.concurrent.Semaphore(4);
+
+        for (final JunkCategory c : pending) {
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        gate.acquire();
+                        if (cb == null || !cb.cancelled()) {
+                            if (!(c.needRoot && !root)) {
+                                try { runCategory(c); } catch (Throwable ignored) {}
+                            }
+                            int n = done.incrementAndGet();
+                            if (cb != null) {
+                                int items = 0;
+                                long bytes = 0;
+                                synchronized (pending) {
+                                    for (JunkCategory k : pending) {
+                                        items += k.items.size();
+                                        bytes += k.total();
+                                    }
+                                }
+                                cb.onCategory(c.name, n, total, items, bytes);
+                            }
+                        }
+                    } catch (InterruptedException ignored) {
+                    } finally {
+                        gate.release();
+                        latch.countDown();
+                    }
+                }
+            }).start();
+        }
+        try {
+            latch.await(10, java.util.concurrent.TimeUnit.MINUTES);
+        } catch (InterruptedException ignored) {}
+        cats.addAll(pending);
+
+        if (cb == null || !cb.cancelled()) {
+            cache = cats;
+            cacheTime = System.currentTimeMillis();
+        }
         return cats;
     }
 
     /** 统一白名单判定 */
     private boolean wl(String nameOrPath) {
         return Finder.inWhitelist(whitelist, nameOrPath);
+    }
+
+    private void runCategory(JunkCategory c) {
+        if ("cache".equals(c.id))          scanAppCache(c);
+        else if ("webview".equals(c.id))   scanWebView(c);
+        else if ("log".equals(c.id))       scanLogs(c);
+        else if ("temp".equals(c.id))      scanTemp(c);
+        else if ("thumb".equals(c.id))     scanThumbs(c);
+        else if ("apkjunk".equals(c.id))   scanApkJunk(c);
+        else if ("emptyjunk".equals(c.id)) scanEmpty(c);
+        else if ("residue".equals(c.id))   scanResidue(c);
+        else if ("syscache".equals(c.id))  scanSysCache(c);
     }
 
     private String scanRoot() {

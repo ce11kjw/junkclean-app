@@ -126,6 +126,103 @@ public abstract class PageBase {
         UI.info(act, "删除失败 " + errors.size() + " 项", sb.toString());
     }
 
+    /**
+     * 有 root 时提供重试选项，否则只展示原因。
+     * Android/data 受限是最常见的失败原因，root 能解决绝大部分。
+     */
+    protected void offerRetry(final List<String> errors, final Runnable after) {
+        if (!Shell.hasRoot()) { showErrors(errors); return; }
+        StringBuilder sb = new StringBuilder();
+        sb.append(errors.size()).append(" 项未能删除：\n\n");
+        int n = Math.min(errors.size(), 20);
+        for (int i = 0; i < n; i++) sb.append("· ").append(errors.get(i)).append('\n');
+        if (errors.size() > n) sb.append("\n… 共 ").append(errors.size()).append(" 项");
+        sb.append("\n\n已检测到 root，可用 root 权限强制删除。");
+        UI.confirm(act, "删除失败", sb.toString(), new Runnable() {
+            public void run() { retryWithRoot(errors, after); }
+        });
+    }
+
+    /** 失败项用 root 重试。路径从错误文案里取「：」之后的部分 */
+    protected void retryWithRoot(final List<String> errors, final Runnable after) {
+        if (!Shell.hasRoot()) { act.toast("需要 root 才能重试"); return; }
+        new Thread(new Runnable() {
+            public void run() {
+                StringBuilder batch = new StringBuilder();
+                for (String e : errors) {
+                    int i = e.indexOf('：');
+                    String p = i >= 0 ? e.substring(i + 1).trim() : e.trim();
+                    if (p.startsWith("…")) p = Util.sdRoot() + p.substring(1);
+                    if (!CleanEngine.isSafe(p)) continue;
+                    batch.append("rm -rf ").append(Shell.quote(p)).append('\n');
+                }
+                if (batch.length() > 0) Shell.exec(true, batch.toString());
+                post(new Runnable() {
+                    public void run() {
+                        act.toast("已用 root 重试 " + errors.size() + " 项");
+                        ScanEngine.invalidate();
+                        if (after != null) after.run();
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /** 反选：已勾的取消，未勾的勾上 */
+    protected void invertAll(List<JunkItem> pool, LinearLayout box) {
+        for (JunkItem it : pool) it.checked = !it.checked;
+        syncChecks(pool, box);
+    }
+
+    /** 只勾体积最大的 N 项，其余取消 */
+    protected void selectTopN(List<JunkItem> pool, LinearLayout box, int n) {
+        List<JunkItem> sorted = new ArrayList<JunkItem>(pool);
+        java.util.Collections.sort(sorted, new java.util.Comparator<JunkItem>() {
+            public int compare(JunkItem a, JunkItem b) { return Long.compare(b.size, a.size); }
+        });
+        for (JunkItem it : pool) it.checked = false;
+        for (int i = 0; i < Math.min(n, sorted.size()); i++) sorted.get(i).checked = true;
+        syncChecks(pool, box);
+    }
+
+    /** 把数据层的勾选状态刷到已渲染的行上 */
+    private void syncChecks(List<JunkItem> pool, LinearLayout box) {
+        int idx = 0;
+        for (int i = 0; i < box.getChildCount() && idx < pool.size(); i++) {
+            View v = box.getChildAt(i);
+            if (!(v instanceof LinearLayout)) continue;
+            View f = ((LinearLayout) v).getChildAt(0);
+            if (f instanceof CheckBox) {
+                ((CheckBox) f).setChecked(pool.get(idx).checked);
+                idx++;
+            }
+        }
+    }
+
+    /**
+     * 分批渲染。列表可能上百项，一次 addView 会明显卡顿；
+     * 首屏只建 24 行，其余分帧追加。
+     */
+    protected void renderBatched(final List<JunkItem> pool, final LinearLayout box,
+                                 final TextView sum, final int from) {
+        final int BATCH = 24;
+        int end = Math.min(from + BATCH, pool.size());
+        Runnable onChange = new Runnable() {
+            public void run() { updateSum(pool, sum); }
+        };
+        for (int i = from; i < end; i++) {
+            JunkItem it = pool.get(i);
+            box.addView(UI.fileRow(act, it, onChange, whitelistAction(it)));
+        }
+        if (end < pool.size()) {
+            box.post(new Runnable() {
+                public void run() {
+                    if (alive()) renderBatched(pool, box, sum, end);
+                }
+            });
+        }
+    }
+
     protected void rebuild(final List<JunkItem> pool, final LinearLayout box, final TextView sum) {
         box.removeAllViews();
         if (pool.isEmpty()) {
@@ -133,10 +230,7 @@ public abstract class PageBase {
             sum.setText("");
             return;
         }
-        Runnable onChange = new Runnable() {
-            public void run() { updateSum(pool, sum); }
-        };
-        for (JunkItem it : pool) box.addView(UI.fileRow(act, it, onChange, whitelistAction(it)));
+        renderBatched(pool, box, sum, 0);
         updateSum(pool, sum);
     }
 }

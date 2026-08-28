@@ -26,28 +26,35 @@ public class SettingsPage extends PageBase {
         if (scroll != null) return scroll;
 
         LinearLayout root = UI.col(act);
-        int p = Theme.dp(act, 14);
-        root.setPadding(p, p, p, p);
+        int p = Theme.dp(act, Theme.S4);
+        root.setPadding(p, Theme.dp(act, Theme.S5), p, p);
+
+        LinearLayout head = UI.col(act);
+        head.addView(UI.eyebrow(act, "配置"));
+        TextView ht = UI.display(act, "设置", Theme.T_TITLE, Theme.TEXT);
+        ht.setTypeface(Theme.display(), android.graphics.Typeface.BOLD);
+        head.addView(ht, UI.lpm(act, UI.WC, UI.WC, 2));
+        root.addView(head);
 
         root.addView(UI.section(act, "运行环境"));
-        root.addView(envCard());
+        root.addView(envCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "外观"));
-        root.addView(themeCard());
+        root.addView(themeCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "背景壁纸"));
-        root.addView(wallpaperCard());
+        root.addView(wallpaperCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "AI 清理建议"));
-        root.addView(aiCard());
+        root.addView(aiCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "清理行为"));
-        root.addView(behaviorCard());
+        root.addView(behaviorCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "扫描分类"));
-        root.addView(catCard());
+        root.addView(catCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "白名单"));
-        root.addView(whitelistCard());
+        root.addView(whitelistCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "远程更新"));
-        root.addView(updateCard());
+        root.addView(updateCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "关于"));
-        root.addView(aboutCard());
-        root.addView(UI.spacer(act, 24));
+        root.addView(aboutCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        root.addView(UI.spacer(act, Theme.S8));
 
         scroll = new ScrollView(act);
         scroll.setVerticalScrollBarEnabled(false);
@@ -60,9 +67,9 @@ public class SettingsPage extends PageBase {
 
     private View envCard() {
         LinearLayout c = UI.card(act);
-        rootInfo = UI.note(act, "");
+        rootInfo = UI.data(act, "", Theme.T_DATA_S, Theme.MUTED);
         c.addView(rootInfo);
-        permState = UI.note(act, "");
+        permState = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         c.addView(permState, UI.lpm(act, UI.MP, UI.WC, 6));
 
         Button test = UI.secondary(act, "测试 root 权限");
@@ -88,7 +95,7 @@ public class SettingsPage extends PageBase {
         LinearLayout c = UI.card(act);
 
         LinearLayout tRow = UI.row(act);
-        tRow.addView(UI.text(act, "主题", 12.5f, Theme.TEXT),
+        tRow.addView(UI.eyebrow(act, "主题"),
                 new LinearLayout.LayoutParams(Theme.dp(act, 50), UI.WC));
         String[][] themes = {{"dark","深色"},{"oled","OLED"},{"light","浅色"}};
         String curTheme = act.store.theme();
@@ -108,7 +115,7 @@ public class SettingsPage extends PageBase {
         c.addView(tRow);
 
         LinearLayout aRow = UI.row(act);
-        aRow.addView(UI.text(act, "强调色", 12.5f, Theme.TEXT),
+        aRow.addView(UI.eyebrow(act, "强调色"),
                 new LinearLayout.LayoutParams(Theme.dp(act, 50), UI.WC));
         String[][] accents = {{"emerald","青绿"},{"violet","紫"},{"blue","蓝"},{"pink","粉"}};
         String curAccent = act.store.accent();
@@ -138,7 +145,7 @@ public class SettingsPage extends PageBase {
         bgInput = UI.input(act, "https://example.com/bg.jpg", act.store.bgUrl());
         c.addView(bgInput, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 10));
 
-        bgState = UI.note(act, "");
+        bgState = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         c.addView(bgState, UI.lpm(act, UI.MP, UI.WC, 6));
 
         Button apply = UI.primary(act, "下载并应用");
@@ -209,7 +216,7 @@ public class SettingsPage extends PageBase {
             aiModel = UI.input(act, "gpt-4o-mini", act.store.aiModel());
             aiBody.addView(aiModel, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
 
-            aiState = UI.note(act, "");
+            aiState = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
             aiBody.addView(aiState, UI.lpm(act, UI.MP, UI.WC, 8));
 
             Button saveModel = UI.primary(act, "保存模型");
@@ -254,7 +261,7 @@ public class SettingsPage extends PageBase {
         aiModel = UI.input(act, "gpt-4o-mini", act.store.aiModel());
         aiBody.addView(aiModel, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), 2));
 
-        aiState = UI.note(act, "");
+        aiState = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         aiBody.addView(aiState, UI.lpm(act, UI.MP, UI.WC, 8));
 
         Button save = UI.primary(act, "保存");
@@ -503,9 +510,10 @@ public class SettingsPage extends PageBase {
 
     private View updateCard() {
         LinearLayout c = UI.card(act);
-        c.addView(UI.note(act, "当前版本 v" + MainActivity.VERSION));
+        c.addView(UI.eyebrow(act, "版本"));
+        c.addView(UI.data(act, "v" + MainActivity.VERSION, Theme.T_TITLE, Theme.TEXT), UI.lpm(act, UI.MP, UI.WC, 2));
 
-        updState = UI.note(act, "点击检查是否有新版本");
+        updState = UI.data(act, "点击检查是否有新版本", Theme.T_DATA_S, Theme.DIM);
         c.addView(updState, UI.lpm(act, UI.MP, UI.WC, 8));
 
         Button check = UI.primary(act, "检查更新");
@@ -582,7 +590,7 @@ public class SettingsPage extends PageBase {
         final Object[] dlg = UI.progress(act, "下载更新 v" + info.version, "准备中…");
         final android.app.Dialog d = (android.app.Dialog) dlg[0];
         final TextView msg = (TextView) dlg[1];
-        final StorageBarView bar = (StorageBarView) dlg[2];
+        final SegmentGauge bar = (SegmentGauge) dlg[2];
 
         new Thread(new Runnable() {
             public void run() {
@@ -660,7 +668,7 @@ public class SettingsPage extends PageBase {
               + "· 有 root 深度清理，无 root 自动降级"), UI.lpm(act, UI.MP, UI.WC, 4));
 
         c.addView(UI.h2(act, "运行状态"), UI.lpm(act, UI.MP, UI.WC, 12));
-        aboutRuntime = UI.note(act, "");
+        aboutRuntime = UI.data(act, "", Theme.T_DATA_S, Theme.MUTED);
         c.addView(aboutRuntime, UI.lpm(act, UI.MP, UI.WC, 4));
 
         c.addView(UI.divider(act));
