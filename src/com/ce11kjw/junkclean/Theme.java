@@ -53,13 +53,21 @@ public final class Theme {
     public static int glassBlur = 8;
 
     /** ga：把基色 alpha 按玻璃感重新映射。0 玻璃感 → 满不透明；1 → 几乎全透 */
+    /**
+     * 玻璃感是「整体不透明度」控制杆：
+     *   glass=0   → 完全不透明（0xFF），卡片是实色的
+     *   glass=1   → 回到 baseAlpha（内芯 0x16 很透，对话框 0xF4 很实）
+     *   中间线性渐变，0~50% 保持较高不透明度，用户拉到多少就看到多少
+     *
+     * 之前用 baseAlpha * glass，baseAlpha 小的层（内芯 22）在玻璃感 10% 时
+     * 就被压到几乎透明——这就是「10% 就全透」的 bug。
+     */
     public static int ga(int baseAlpha) {
-        // 0 玻璃感：实色卡片，保留基色（不透明）
         if (glass <= 0f) return 0xFF;
-        // 1 玻璃感：几乎全透，但留 0x08 保底避免高光层消失
-        if (glass >= 1f) return Math.max(0x08, baseAlpha / 4);
-        // 中间：按玻璃感线性缩放，最低 0x10 保证可见性
-        return Math.max(0x10, Math.min(0xFF, (int) (baseAlpha * glass)));
+        if (glass >= 1f) return baseAlpha;
+        // 从 0xFF 向 baseAlpha 线性过渡：glass=0.5 → (0xFF+baseAlpha)/2
+        int a = baseAlpha + (int) ((0xFF - baseAlpha) * (1f - glass));
+        return Math.max(0x08, Math.min(0xFF, a));
     }
 
     /** gaEdge：边框 alpha 随玻璃感**反向放大**，玻璃感越强边越亮（描出轮廓） */
