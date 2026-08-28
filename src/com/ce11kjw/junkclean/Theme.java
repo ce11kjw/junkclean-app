@@ -54,10 +54,12 @@ public final class Theme {
 
     /** ga：把基色 alpha 按玻璃感重新映射。0 玻璃感 → 满不透明；1 → 几乎全透 */
     public static int ga(int baseAlpha) {
+        // 0 玻璃感：实色卡片，保留基色（不透明）
         if (glass <= 0f) return 0xFF;
-        if (glass >= 1f) return Math.min(0x10, baseAlpha / 8);
-        // 玻璃感 0.3 时 alpha 乘 0.3，0.7 时乘 0.7
-        return Math.max(0, Math.min(0xFF, (int) (baseAlpha * glass)));
+        // 1 玻璃感：几乎全透，但留 0x08 保底避免高光层消失
+        if (glass >= 1f) return Math.max(0x08, baseAlpha / 4);
+        // 中间：按玻璃感线性缩放，最低 0x10 保证可见性
+        return Math.max(0x10, Math.min(0xFF, (int) (baseAlpha * glass)));
     }
 
     /** gaEdge：边框 alpha 随玻璃感**反向放大**，玻璃感越强边越亮（描出轮廓） */

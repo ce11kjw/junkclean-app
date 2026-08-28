@@ -49,8 +49,12 @@ public class Card extends LinearLayout {
             blurA = Math.max(0, (int) (base * Theme.glass));
         }
         blurPaint.setColor(Color.argb(blurA, 0, 0, 0));
-        blurPaint.setMaskFilter(new BlurMaskFilter(
-                Theme.dp(c, Theme.glassBlur), BlurMaskFilter.Blur.NORMAL));
+        try {
+            blurPaint.setMaskFilter(new BlurMaskFilter(
+                    Theme.dp(c, Theme.glassBlur), BlurMaskFilter.Blur.NORMAL));
+        } catch (Throwable ignored) {
+            // 个别设备不支持 BlurMaskFilter，降级为无模糊
+        }
 
         // 内芯外圈描边：随玻璃感增强（边框是真玻璃的视觉层次承担者）
         edgePaint.setStyle(Paint.Style.STROKE);
@@ -108,17 +112,26 @@ public class Card extends LinearLayout {
 
     @Override
     protected void dispatchDraw(Canvas cv) {
-        // 子 View 绘制前画模糊带 —— 覆盖整个 Card 矩形，让边缘的羽化
-        // 向内收缩，制造「中心清、边缘柔」的隔热毯效果
-        if (getWidth() > 0 && getHeight() > 0) {
-            cv.drawRoundRect(0, 0, getWidth(), getHeight(), rShell, rShell, blurPaint);
+        // 模糊带 + 描边画在子 View 之前。BlurMaskFilter 在部分 GPU 驱动
+        // （Adreno/Mali 旧版）上配合硬件加速会抛 UnsupportedOperationException，
+        // 直接导致闪退。这里 try/catch 兜底：一旦失败就跳过模糊带，
+        // 只保留描边（描边是普通 drawRoundRect，无风险）。
+        try {
+            if (getWidth() > 0 && getHeight() > 0 && blurPaint != null) {
+                cv.drawRoundRect(0, 0, getWidth(), getHeight(), rShell, rShell, blurPaint);
+            }
+        } catch (Throwable ignored) {
+            // GPU 不支持模糊带：静默降级，不崩溃
         }
         super.dispatchDraw(cv);
-        // 子 View 绘制后再描亮边，避免被模糊带盖掉
-        if (getWidth() > 0 && getHeight() > 0) {
-            float half = edgePaint.getStrokeWidth() / 2f;
-            cv.drawRoundRect(half, half, getWidth() - half, getHeight() - half,
-                    rShell, rShell, edgePaint);
+        try {
+            if (getWidth() > 0 && getHeight() > 0 && edgePaint != null) {
+                float half = edgePaint.getStrokeWidth() / 2f;
+                cv.drawRoundRect(half, half, getWidth() - half, getHeight() - half,
+                        rShell, rShell, edgePaint);
+            }
+        } catch (Throwable ignored) {
+            // 描边失败也不影响主内容
         }
     }
 }
