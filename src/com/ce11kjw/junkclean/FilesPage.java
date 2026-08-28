@@ -52,7 +52,8 @@ public class FilesPage extends PageBase {
 
     // 文件清理（目录浏览）
     private LinearLayout brList;
-    private TextView brPath, brSum;
+    private TextView brSum;
+    private android.widget.EditText brPath;
     private String brCur;
     private List<Browser.Entry> brItems = new ArrayList<Browser.Entry>();
     private boolean brDirSize = true;
@@ -655,10 +656,20 @@ public class FilesPage extends PageBase {
         c.addView(UI.title(act, "目录浏览"), UI.lpm(act, UI.MP, UI.WC, 2));
         c.addView(UI.note(act, "手动删除任意文件或文件夹，重要目录标记保护且不可删除"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
-        brPath = UI.text(act, "", 11.5f, Theme.ACCENT);
-        brPath.setSingleLine(true);
-        brPath.setEllipsize(android.text.TextUtils.TruncateAt.START);
-        c.addView(brPath, UI.lpm(act, UI.MP, UI.WC, 10));
+        // 路径输入框 + 「查看目录」按钮：直接输入或编辑路径进入
+        LinearLayout pathRow = UI.row(act);
+        brPath = UI.input(act, Util.sdRoot(), Util.sdRoot());
+        brPath.setTypeface(Theme.data());
+        brPath.setTextSize(Theme.T_DATA_S);
+        pathRow.addView(brPath, UI.weight(1f, UI.BTN_H, act));
+        Button viewBtn = UI.primary(act, "查看目录");
+        viewBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { goToPath(brPath.getText().toString().trim()); }
+        });
+        LinearLayout.LayoutParams vp = UI.lp(Theme.dp(act, 72), Theme.dp(act, UI.BTN_H));
+        vp.leftMargin = Theme.dp(act, Theme.S2);
+        pathRow.addView(viewBtn, vp);
+        c.addView(pathRow, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
 
         c.addView(UI.switchRow(act, "计算文件夹体积", "关闭可加快大目录加载", brDirSize,
                 new android.widget.CompoundButton.OnCheckedChangeListener() {
@@ -782,6 +793,20 @@ public class FilesPage extends PageBase {
                 loadBrowse(sc[w][1]);
             }
         });
+    }
+
+    /** 用户填路径 → 校验存在 → 进入 */
+    private void goToPath(String path) {
+        if (path == null || path.isEmpty()) { act.toast("请输入路径"); return; }
+        // 相对路径补全到 sdcard
+        java.io.File f = new java.io.File(path);
+        if (!f.isAbsolute()) f = new java.io.File(Util.sdRoot(), path);
+        if (!f.exists() || !f.isDirectory()) {
+            act.toast("目录不存在：" + f.getAbsolutePath());
+            return;
+        }
+        brPath.setText(f.getAbsolutePath());
+        loadBrowse(f.getAbsolutePath());
     }
 
     private void loadBrowse(final String path) {

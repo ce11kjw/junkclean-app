@@ -106,10 +106,23 @@ public final class Updater {
             return null;
         }
         try {
-            // 直接写公共 Download，系统安装器才能读到
+            // 优先写公共 Download（系统安装器能直接读），失败降级 app 私有目录
+            File f = null;
             File dir = new File(Util.sdRoot() + "/Download");
-            if (!dir.exists()) dir.mkdirs();
-            File f = new File(dir, "JunkClean-update.apk");
+            if ((dir.exists() || dir.mkdirs()) && dir.isDirectory()) {
+                f = new File(dir, "JunkClean-update.apk");
+            }
+            if (f == null) {
+                // 私有目录 + FileProvider 安装
+                File appDir = new File(c.getFilesDir(), "update");
+                if (appDir.mkdirs() || appDir.isDirectory()) {
+                    f = new File(appDir, "JunkClean-update.apk");
+                }
+            }
+            if (f == null) {
+                lastError = "没有可写的下载位置";
+                return null;
+            }
             FileOutputStream out = new FileOutputStream(f);
             out.write(data);
             out.close();
@@ -170,7 +183,7 @@ public final class Updater {
         }
     }
 
-    /** 返回公共下载目录中的更新包路径，供 UI 提示 */
+    /** 返回更新包可能所在的路径，供 UI 提示 */
     public static String publicApkPath() {
         return Util.sdRoot() + "/Download/JunkClean-update.apk";
     }
