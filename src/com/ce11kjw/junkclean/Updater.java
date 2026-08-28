@@ -108,34 +108,33 @@ public final class Updater {
             lastError = "不是有效的 APK（缺少 zip 头）";
             return null;
         }
+        // 关键修复：不再用 exists()/mkdirs() 预判目录（FUSE 层会返回假阳性），
+        // 而是直接尝试写 Download，catch 到 ENOENT 再降级 app 私有目录。
+        // try/catch 才是真实判定。
         try {
-            // 优先写公共 Download（系统安装器能直接读），失败降级 app 私有目录
-            File f = null;
-            File dir = new File(Util.sdRoot() + "/Download");
-            if ((dir.exists() || dir.mkdirs()) && dir.isDirectory()) {
-                f = new File(dir, "JunkClean-update.apk");
-            }
-            if (f == null) {
-                // 私有目录 + FileProvider 安装
+            return writeTo(new File(Util.sdRoot(), "Download/JunkClean-update.apk"), data);
+        } catch (Exception e1) {
+            try {
                 File appDir = new File(c.getFilesDir(), "update");
-                if (appDir.mkdirs() || appDir.isDirectory()) {
-                    f = new File(appDir, "JunkClean-update.apk");
-                }
-            }
-            if (f == null) {
-                lastError = "没有可写的下载位置";
+                return writeTo(new File(appDir, "JunkClean-update.apk"), data);
+            } catch (Exception e2) {
+                lastError = "写入失败：" + e2.getMessage();
                 return null;
             }
-            FileOutputStream out = new FileOutputStream(f);
-            out.write(data);
-            out.close();
-            f.setReadable(true, false);
-            lastWritePath = f.getAbsolutePath();
-            return f;
-        } catch (Exception e) {
-            lastError = "写入失败：" + e.getMessage();
-            return null;
         }
+    }
+
+    /** 写文件（父目录自动创建），失败抛异常由上层 fallback */
+    private static File writeTo(File f, byte[] data) throws Exception {
+        if (f.getParentFile() != null && !f.getParentFile().isDirectory()) {
+            f.getParentFile().mkdirs();
+        }
+        FileOutputStream out = new FileOutputStream(f);
+        out.write(data);
+        out.close();
+        f.setReadable(true, false);
+        lastWritePath = f.getAbsolutePath();
+        return f;
     }
 
     /**
