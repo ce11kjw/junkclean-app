@@ -63,8 +63,11 @@ public final class Anim {
             public boolean onTouch(View view, android.view.MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case android.view.MotionEvent.ACTION_DOWN:
-                        view.animate().scaleX(scale).scaleY(scale).alpha(0.9f)
+                        // 物理按压：缩放 + 微浮起（elevation） + 振动
+                        view.animate().scaleX(scale).scaleY(scale).alpha(0.92f)
                                 .setDuration(110).setInterpolator(Theme.press()).start();
+                        try { view.setElevation(view.getElevation() + 2f); } catch (Throwable ignored) {}
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
                         break;
                     case android.view.MotionEvent.ACTION_UP:
                     case android.view.MotionEvent.ACTION_CANCEL:
@@ -72,7 +75,7 @@ public final class Anim {
                                 .setDuration(220).setInterpolator(Theme.spring()).start();
                         break;
                 }
-                return false;   // 不拦截，onClick 照常触发
+                return false;
             }
         });
     }

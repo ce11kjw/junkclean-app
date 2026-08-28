@@ -90,13 +90,18 @@ public final class PerceptualHash {
     }
 
     /**
-     * 视频多帧指纹：抽首/中/尾 3 帧的 dHash，取「多数一致」位。
-     * 比单首帧鲁棒：转码（画面不变）三帧都一致；剪辑（部分帧不同）
-     * 多数帧仍一致 → 识别为同一视频。参考 VDF 思路的视觉降级版。
+     * 视频多帧指纹：抽 10 帧（每 10%）的 dHash，取「多数一致」位。
+     * 比单首帧鲁棒很多：
+     *   转码（画面不变）十帧几乎全一致 → 识别
+     *   剪辑（短片段）多数帧仍一致 → 识别
+     *   不同视频：大多数位差异 → 排除
+     * 参考 VDF 思路的视觉降级版。
      */
     public static long mediaHash(File f) {
         if (!isVideo(f)) return aHash(f);
         MediaMetadataRetriever r = new MediaMetadataRetriever();
+        long[] frames = new long[10];
+        android.graphics.Bitmap[] bs = new android.graphics.Bitmap[10];
         try {
             r.setDataSource(f.getAbsolutePath());
             long durUs = 0;
@@ -104,25 +109,31 @@ public final class PerceptualHash {
             if (dur != null) {
                 try { durUs = Long.parseLong(dur) * 1000L; } catch (Exception ignored) {}
             }
-            long[] frames = new long[3];
-            Bitmap b0 = r.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-            Bitmap b1 = durUs > 0 ? r.getFrameAtTime(durUs / 2, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                                   : r.getFrameAtTime(500000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-            Bitmap b2 = durUs > 0 ? r.getFrameAtTime(durUs - 1, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                                   : r.getFrameAtTime(1000000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-            frames[0] = b0 != null ? dHashOf(b0) : 0;
-            frames[1] = b1 != null ? dHashOf(b1) : 0;
-            frames[2] = b2 != null ? dHashOf(b2) : 0;
-            if (b0 != null && !b0.isRecycled()) b0.recycle();
-            if (b1 != null && !b1.isRecycled()) b1.recycle();
-            if (b2 != null && !b2.isRecycled()) b2.recycle();
+            // 每 10% 抽样，超短视频回退到毫秒位置
+            long[] pts = new long[10];
+            if (durUs > 0) {
+                for (int i = 0; i < 10; i++) {
+                    pts[i] = durUs * i / 10;
+                }
+            } else {
+                long[] fallbacks = {0, 500000, 1000000, 1500000, 2000000,
+                                      3000000, 4000000, 5000000, 6000000, 7000000};
+                System.arraycopy(fallbacks, 0, pts, 0, 10);
+            }
+            for (int i = 0; i < 10; i++) {
+                bs[i] = r.getFrameAtTime(pts[i], MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                frames[i] = bs[i] != null ? dHashOf(bs[i]) : 0;
+            }
+            for (int i = 0; i < 10; i++) {
+                if (bs[i] != null && !bs[i].isRecycled()) bs[i].recycle();
+            }
 
-            // 多数一致位：三帧里 ≥2 帧相同的位置取 1
+            // 多数一致位：10 帧里 ≥6 帧相同的位置取 1
             long maj = 0;
             for (int bit = 0; bit < 64; bit++) {
                 int ones = 0;
-                for (long fh : frames) ones += ((fh >> bit) & 1L);
-                if (ones >= 2) maj |= (1L << bit);
+                for (int i = 0; i < 10; i++) ones += ((frames[i] >> bit) & 1L);
+                if (ones >= 6) maj |= (1L << bit);
             }
             return maj;
         } catch (Throwable ignored) {

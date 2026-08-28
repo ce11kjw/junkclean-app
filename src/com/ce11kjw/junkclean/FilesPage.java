@@ -381,12 +381,13 @@ public class FilesPage extends PageBase {
         if ("oldest".equals(key)) return "保留最旧";
         if ("shortest".equals(key)) return "保留路径最短";
         if ("largest".equals(key)) return "保留体积最大";
+        if ("ai_smart".equals(key)) return "AI 智能";
         return "保留最新";
     }
 
     private void pickPolicy() {
-        final String[] labels = {"保留最新", "保留最旧", "保留路径最短", "保留体积最大"};
-        final String[] keys = {"newest", "oldest", "shortest", "largest"};
+        final String[] labels = {"保留最新", "保留最旧", "保留路径最短", "保留体积最大", "AI 智能"};
+        final String[] keys = {"newest", "oldest", "shortest", "largest", "ai_smart"};
         int cur = 0;
         for (int i = 0; i < keys.length; i++) if (keys[i].equals(keepPolicy)) cur = i;
         UI.pick(act, "保留策略", labels, cur, new android.content.DialogInterface.OnClickListener() {
@@ -411,7 +412,35 @@ public class FilesPage extends PageBase {
                 final int vThresh = act.store.visualThreshold();
                 final List<Finder.DupGroup> gs = Finder.duplicates(
                         scanRoot(), 65536, 40, wl(), vThresh);
-                Finder.applyKeepPolicy(gs, keepPolicy);
+                
+                // AI 智能策略：用视觉模型挑最优
+                if ("ai_smart".equals(keepPolicy) && act.store.aiReady() && !gs.isEmpty()) {
+                    final java.util.Map<String, QualityAI.Verdict> verdicts = new java.util.HashMap<>();
+                    for (Finder.DupGroup g : gs) {
+                        QualityAI.judge(act, g.files, act.store, verdicts);
+                    }
+                    // 选中每组得分最高的那一份
+                    for (Finder.DupGroup g : gs) {
+                        JunkItem best = null;
+                        float bestScore = -1;
+                        for (JunkItem it : g.files) {
+                            QualityAI.Verdict v = verdicts.get(it.path);
+                            if (v != null && v.score > bestScore) {
+                                bestScore = v.score;
+                                best = it;
+                            }
+                        }
+                        if (best != null) {
+                            // AI 给了评分 —— 选中最高分，其余标 checked
+                            for (int i = 0; i < g.files.size(); i++) g.files.get(i).checked = (g.files.get(i) != best);
+                        } else {
+                            // AI 未评分（全失败） —— 兜底走 newest
+                            Finder.applyKeepPolicy(Collections.singletonList(g), "newest");
+                        }
+                    }
+                } else {
+                    Finder.applyKeepPolicy(gs, keepPolicy);
+                }
                 post(new Runnable() {
                     public void run() { dupGroups = gs; renderDup(); }
                 });

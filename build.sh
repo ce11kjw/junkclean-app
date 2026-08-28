@@ -19,6 +19,7 @@ $BT/aapt2 link -o $OUT/base.apk -I $PLATFORM \
 echo "[3/6] javac 编译..."
 set +e
 javac -source 8 -target 8 -bootclasspath $PLATFORM \
+    -cp libs/opencv.jar \
     -d $OUT/classes $(find src -name "*.java") 2>&1 \
     | grep -v "bootstrap class path" | tee $OUT/javac.log
 set +e
@@ -32,10 +33,21 @@ if [ "$JAVAC_FAIL" != "0" ]; then
 fi
 
 echo "[4/6] d8 dex..."
-$BT/d8 --lib $PLATFORM --release --output $OUT $(find $OUT/classes -name "*.class")
+mkdir -p $OUT/opencv-classes
+cd /tmp/opencv-classes && cp -r org $OUT/opencv-classes/ 2>/dev/null || true
+cd /opt/junkclean-app
+# 解压 opencv.jar 到 opencv-classes（与 stub 合并）
+cd $OUT/opencv-classes && jar xf /opt/junkclean-app/libs/opencv.jar
+cd /opt/junkclean-app
+$BT/d8 --lib $PLATFORM --release --output $OUT $(find $OUT/classes $OUT/opencv-classes -name "*.class")
 
 echo "[5/6] 打包+对齐..."
 cd $OUT && zip -j -q base.apk classes.dex
+# 打包 so 到 lib/（Android 原生库路径）
+mkdir -p lib/arm64-v8a lib/armeabi-v7a
+cp /opt/junkclean-app/jniLibs/arm64-v8a/libopencv_java4.so lib/arm64-v8a/
+cp /opt/junkclean-app/jniLibs/armeabi-v7a/libopencv_java4.so lib/armeabi-v7a/
+zip -r -q base.apk lib/arm64-v8a lib/armeabi-v7a
 $BT/zipalign -f 4 base.apk aligned.apk
 
 echo "[6/6] 签名..."

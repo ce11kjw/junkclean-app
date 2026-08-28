@@ -127,6 +127,11 @@ public final class Theme {
         if (DISPLAY == null) DISPLAY = Typeface.create("sans-serif-light", Typeface.NORMAL);
         return DISPLAY;
     }
+
+    /**
+     * OpenType 表格数字：让 0-9 等宽，排行列表的字节数对齐成列（API 26+）。
+     * 在所有需要显示数值的 TextView 上调一次。
+     */
     /** 所有字节数、百分比、路径、计数 —— 等宽保证多行数字垂直对齐 */
     public static Typeface data() {
         if (DATA == null) DATA = Typeface.create("monospace", Typeface.NORMAL);

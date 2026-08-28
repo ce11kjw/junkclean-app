@@ -122,13 +122,50 @@ public final class UI {
         return r;
     }
 
-    public static TextView empty(Context c, String s) {
-        TextView t = text(c, s, Theme.T_BODY_S, Theme.DIM);
-        t.setGravity(Gravity.CENTER);
-        t.setLineSpacing(0, 1.6f);
-        t.setPadding(0, Theme.dp(c, Theme.S5), 0, Theme.dp(c, Theme.S5));
-        return t;
+/**
+ * 富空状态：图标 + 主文案 + 副文案 + 可选操作按钮。
+ * 用法：UI.emptyState(c, "🗂", "没有发现重复文件",
+ *                       "试试放宽感知哈希阈值", "调整阈值", () -> {…});
+ */
+public static LinearLayout emptyState(Context c, String icon, String title,
+                                       String subtitle, String actionLabel, final Runnable action) {
+    LinearLayout col = col(c);
+    col.setGravity(Gravity.CENTER);
+    int ph = Theme.dp(c, Theme.S5);
+    col.setPadding(0, ph, 0, ph);
+    TextView iconT = text(c, icon, 48, Theme.DIM);
+    iconT.setGravity(Gravity.CENTER);
+    col.addView(iconT);
+    col.addView(UI.spacer(c, Theme.S2));
+    TextView titleT = text(c, title, Theme.T_HEAD, Theme.MUTED);
+    titleT.setGravity(Gravity.CENTER);
+    col.addView(titleT);
+    if (subtitle != null && !subtitle.isEmpty()) {
+        col.addView(UI.spacer(c, Theme.S1));
+        TextView subT = text(c, subtitle, Theme.T_BODY_S, Theme.DIM);
+        subT.setGravity(Gravity.CENTER);
+        col.addView(subT);
     }
+    if (actionLabel != null && action != null) {
+        col.addView(UI.spacer(c, Theme.S3));
+        Button b = secondary(c, actionLabel);
+        b.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { action.run(); }
+        });
+        LinearLayout.LayoutParams bp = UI.lp(UI.WC, Theme.dp(c, UI.BTN_H));
+        col.addView(b, bp);
+    }
+    return col;
+}
+
+/** 保留旧版简单空状态（兼容） */
+public static TextView empty(Context c, String s) {
+    TextView t = text(c, s, Theme.T_BODY_S, Theme.DIM);
+    t.setGravity(Gravity.CENTER);
+    t.setLineSpacing(0, 1.6f);
+    t.setPadding(0, Theme.dp(c, Theme.S5), 0, Theme.dp(c, Theme.S5));
+    return t;
+}
 
     // ---------- 按钮 ----------
 
