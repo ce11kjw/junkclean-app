@@ -50,6 +50,8 @@ public class SettingsPage extends PageBase {
         root.addView(catCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "白名单"));
         root.addView(whitelistCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        root.addView(UI.section(act, "定时清理"));
+        root.addView(scheduleCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "远程更新"));
         root.addView(updateCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "关于"));

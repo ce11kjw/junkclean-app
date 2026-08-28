@@ -162,43 +162,18 @@ public final class Finder {
             sysTop = sysTop.subList(0, sysN);
         }
 
-        // 合并：用户全在前面，系统补足
+        // 合并：用户目录 + 系统分区，统一按大小降序。
+        // 不再做二级展开 —— 之前把 300MB 的子目录和 50GB 的父目录混排，
+        // 中间 1GB/2GB 的目录被 top 截断挤掉，用户看到「50GB 第一、300MB 第二」。
+        // 排行只看一级：父目录代表整个文件夹大小，子目录去文件浏览里看。
         List<JunkItem> out = new ArrayList<JunkItem>(userTop);
         for (JunkItem s : sysTop) {
             s.checked = false;
             out.add(s);
         }
-        // 如果用户不到 top，剩下的全给系统（仍排序后追加）
-        if (out.size() < top && sysTop.size() < sysTop.size()) {
-            // 上面已经限制过了，这里只是兜底
-        }
-
-        // 展开用户一级目录的前 6 个，帮助定位真正占空间的位置
-        if (depth >= 2) {
-            int expand = Math.min(6, firstLevel.size());
-            for (int i = 0; i < expand; i++) {
-                JunkItem parent = firstLevel.get(i);
-                File[] kids = new File(parent.path).listFiles();
-                if (kids == null) continue;
-                List<JunkItem> subs = new ArrayList<JunkItem>();
-                for (File k : kids) {
-                    if (!k.isDirectory() || k.getName().startsWith(".")) continue;
-                    if (inWhitelist(wl, k.getName())) continue;
-                    long s = Util.dirSize(k);
-                    // 保留占父目录 5% 以上且大于 4MB 的子目录：之前 8MB/8% 太严，
-                    // 小容量设备看不到任何展开
-                    if (s > 4194304L && s * 100 / Math.max(1, parent.size) >= 5) {
-                        subs.add(mk(k.getAbsolutePath(),
-                                parent.name + " / " + k.getName(), s));
-                    }
-                }
-                Collections.sort(subs, BY_SIZE);
-                int take = Math.min(4, subs.size());
-                for (int j = 0; j < take; j++) out.add(subs.get(j));
-            }
-        }
-
-        return sortBySize(out, top);
+        // 纯大小降序，不截断到 top 之前（top 只是分页上限）
+        Collections.sort(out, BY_SIZE);
+        return out.size() > top ? new ArrayList<JunkItem>(out.subList(0, top)) : out;
     }
 
     private static JunkItem mk(String path, String name, long size) {
