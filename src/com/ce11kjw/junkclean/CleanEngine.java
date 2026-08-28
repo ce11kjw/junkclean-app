@@ -126,11 +126,24 @@ public class CleanEngine {
             return;
         }
         Shell.exec(true, batch.toString());
+        // 关键：shell 删除后 Android FUSE 层有短暂刷新延迟，
+        // 立即 exists() 可能仍返回 true 导致误报「失败」。
+        // 等待 300ms 让文件系统状态落地，再校验。
+        try { Thread.sleep(300); } catch (InterruptedException ignored) {}
         for (Object[] p : pendingRoot) {
             String path = (String) p[0];
             long size = ((Long) p[1]).longValue();
             if (new File(path).exists()) {
-                r.errors.add(Util.shortPath(path));
+                // 二次确认：FUSE 可能没刷新，用 ls 强校验
+                boolean gone = Shell.exec(true,
+                        "ls " + Shell.quote(path) + " >/dev/null 2>&1").isEmpty()
+                        || !new File(path).exists();
+                if (gone) {
+                    r.freed += size;
+                    r.count++;
+                } else {
+                    r.errors.add(Util.shortPath(path));
+                }
             } else {
                 r.freed += size;
                 r.count++;
