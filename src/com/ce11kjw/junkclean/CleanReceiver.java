@@ -36,6 +36,31 @@ public class CleanReceiver extends BroadcastReceiver {
                     });
                     final CleanEngine.Result r = new CleanEngine(s.toTrash()).clean(cats);
                     s.addStat(r.freed, r.count);
+                    // 清理用户保存的目录（文件清理 → 保存到定时清理列表）
+                    for (String dirLine : s.savedCleanDirs()) {
+                        String[] parts = dirLine.split("\\|", 2);
+                        String path = parts.length > 0 ? parts[0] : "";
+                        if (path.isEmpty()) continue;
+                        java.io.File dir = new java.io.File(path);
+                        if (!dir.exists()) continue;
+                        if (parts.length > 1 && "1".equals(parts[1])) {
+                            // 删整个目录
+                            java.util.Collections.singletonList(new JunkItem(path, "", 0));
+                            CleanEngine.Result dr = new CleanEngine(false).cleanItems(
+                                    java.util.Collections.singletonList(new JunkItem(path, "", 0)));
+                            s.addStat(dr.freed, dr.count);
+                        } else {
+                            // 只删内部文件，保留目录
+                            java.io.File[] kids = dir.listFiles();
+                            if (kids != null) {
+                                java.util.List<JunkItem> items = new java.util.ArrayList<JunkItem>();
+                                for (java.io.File k : kids)
+                                    items.add(new JunkItem(k.getAbsolutePath(), k.getName(), 0));
+                                CleanEngine.Result dr = new CleanEngine(false).cleanItems(items);
+                                s.addStat(dr.freed, dr.count);
+                            }
+                        }
+                    }
                     long cost = (System.currentTimeMillis() - t0) / 1000;
                     HANDLER.post(new Runnable() {
                         public void run() {

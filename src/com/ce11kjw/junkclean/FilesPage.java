@@ -52,6 +52,7 @@ public class FilesPage extends PageBase {
 
     // 文件清理（目录浏览）
     private android.widget.EditText brPath;
+    private LinearLayout savedDirList;
     private String brCur;
     private List<Browser.Entry> brItems = new ArrayList<Browser.Entry>();
 
@@ -654,123 +655,88 @@ public class FilesPage extends PageBase {
     private View browseCard() {
         LinearLayout c = UI.card(act);
         c.addView(UI.eyebrow(act, "文件清理"));
-        c.addView(UI.title(act, "目录删除"), UI.lpm(act, UI.MP, UI.WC, 2));
-        c.addView(UI.note(act, "填入目录路径，一键删除整个目录（含内部所有内容）。\n重要目录受保护不可删。"),
+        c.addView(UI.title(act, "目录定时清理"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "填入目录路径，保存到定时清理列表。到点自动清理，无需手动操作。"),
                 UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
-        // 路径输入框 + 删除按钮
+        // 路径输入框 + 保存按钮
         LinearLayout pathRow = UI.row(act);
-        brPath = UI.input(act, Util.sdRoot() + "/Download/temp", "");
+        brPath = UI.input(act, Util.sdRoot() + "/.junkclean_trash", "");
         brPath.setTypeface(Theme.data());
         brPath.setTextSize(Theme.T_DATA_S);
         pathRow.addView(brPath, UI.weight(1f, UI.BTN_H, act));
-        Button delBtn = UI.danger(act, "删除目录");
-        delBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { deleteEnteredDir(); }
+        Button saveBtn = UI.primary(act, "保存");
+        saveBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { saveCleanDir(); }
         });
-        LinearLayout.LayoutParams vp = UI.lp(Theme.dp(act, 88), Theme.dp(act, UI.BTN_H));
+        LinearLayout.LayoutParams vp = UI.lp(Theme.dp(act, 64), Theme.dp(act, UI.BTN_H));
         vp.leftMargin = Theme.dp(act, Theme.S2);
-        pathRow.addView(delBtn, vp);
+        pathRow.addView(saveBtn, vp);
         c.addView(pathRow, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
 
-        // 快捷路径 chips
-        c.addView(UI.eyebrow(act, "快捷"), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
-        LinearLayout chipRow = UI.row(act);
-        String[] quick = {"/Download", "/DCIM", "/Pictures", "/Movies", "/Music", "/Android/data"};
-        for (final String q : quick) {
-            Button chip = UI.chip(act, q, false);
-            chip.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    brPath.setText(Util.sdRoot() + q);
-                }
-            });
-            LinearLayout.LayoutParams lp = UI.lp(UI.WC, Theme.dp(act, 26));
-            lp.rightMargin = Theme.dp(act, Theme.S1);
-            chipRow.addView(chip, lp);
-        }
-        c.addView(chipRow, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        // 尾斜杠规则说明
+        c.addView(UI.note(act, "路径规则：/sdcard/.jx/ 带尾斜杠 → 只删文件保留目录\n"
+                + "         /sdcard/.jx  不带尾斜杠 → 删整个目录（含目录本身）"),
+                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
 
+        // 已保存列表
+        c.addView(UI.eyebrow(act, "待清理"), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+        savedDirList = UI.col(act);
+        c.addView(savedDirList, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+        renderSavedCleanDirs();
+
+        Button clearAll = UI.secondary(act, "清空列表");
+        clearAll.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { act.store.clearCleanDirs(); renderSavedCleanDirs(); }
+        });
+        c.addView(clearAll, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
         return c;
     }
 
-    /** 用户填的目录 → 二次确认 → 整目录删除 */
-    private void deleteEnteredDir() {
-        final String path = brPath.getText().toString().trim();
-        if (path.isEmpty()) { act.toast("请输入目录路径"); return; }
-        // 路径规则：/sdcard/.junkclean_trash/  带尾斜杠 → 只删内容，保留目录
-        //          /sdcard/.junkclean_trash   不带尾斜杠 → 删整个目录
-        boolean deleteDirItself = !path.endsWith("/") && !path.endsWith("/ ");
-        String cleanPath = path.replaceAll("/+$", "");  // 去掉尾斜杠
-
+    private void saveCleanDir() {
+        String path = brPath.getText().toString().trim();
+        if (path.isEmpty()) { act.toast("请输入路径"); return; }
+        // 尾斜杠规则
+        boolean delItself = !path.endsWith("/") && !path.endsWith("/ ");
+        String cleanPath = path.replaceAll("/+$", "");
         java.io.File f = new java.io.File(cleanPath);
         if (!f.isAbsolute()) f = new java.io.File(Util.sdRoot(), cleanPath);
-        String abs = f.getAbsolutePath();
-
         if (!f.exists() || !f.isDirectory()) {
-            act.toast("目录不存在：" + abs);
+            act.toast("目录不存在：" + f.getAbsolutePath());
             return;
         }
-        if (!CleanEngine.isSafe(abs)) {
-            act.toast("受保护路径，不能删除：" + Util.shortPath(abs));
-            return;
-        }
-
-        long size = Util.dirSize(f);
-        final String target = abs;
-        final boolean delItself = deleteDirItself;
-        String msg = delItself
-                ? "将永久删除整个目录：\n" + Util.shortPath(target)
-                : "将清空目录内容（保留目录本身）：\n" + Util.shortPath(target);
-        msg += "\n\n包含 " + Util.fmtSize(size) + " 数据，无法恢复！";
-        UI.confirm(act, delItself ? "删除整个目录" : "清空目录内容", msg,
-                new Runnable() {
-            public void run() {
-                new Thread(new Runnable() {
-                    public void run() {
-                        if (delItself) {
-                            // 删除整个目录
-                            final CleanEngine.Result r = new CleanEngine(false).cleanItems(
-                                    java.util.Collections.singletonList(
-                                            new JunkItem(target, new java.io.File(target).getName(), 0)));
-                            post(new Runnable() {
-                                public void run() {
-                                    reportDeleteResult(r, target);
-                                }
-                            });
-                        } else {
-                            // 只删内部文件，保留目录
-                            boolean ok = true;
-                            java.io.File dir = new java.io.File(target);
-                            java.io.File[] kids = dir.listFiles();
-                            if (kids != null) {
-                                final java.util.List<JunkItem> items = new java.util.ArrayList<JunkItem>();
-                                for (java.io.File k : kids) {
-                                    items.add(new JunkItem(k.getAbsolutePath(), k.getName(), 0));
-                                }
-                                final CleanEngine.Result r = new CleanEngine(false).cleanItems(items);
-                                post(new Runnable() {
-                                    public void run() {
-                                        reportDeleteResult(r, target);
-                                    }
-                                });
-                            }
-                        }
-                    }
-                }).start();
-            }
-        });
+        act.store.saveCleanDir(f.getAbsolutePath(), delItself);
+        act.toast("已保存，下次定时清理时执行");
+        renderSavedCleanDirs();
     }
 
-    private void reportDeleteResult(CleanEngine.Result r, String target) {
-        act.store.addStat(r.freed, r.count);
-        ScanEngine.invalidate();
-        if (r.count > 0 || r.freed > 0) {
-            act.toast("已处理 " + r.count + " 项 · " + Util.fmtSize(r.freed));
-        } else {
-            act.toast("删除失败，试试 root 或检查权限");
-            if (!r.errors.isEmpty()) offerRetry(r.errors, null);
+    private void renderSavedCleanDirs() {
+        savedDirList.removeAllViews();
+        List<String> dirs = act.store.savedCleanDirs();
+        if (dirs.isEmpty()) {
+            savedDirList.addView(UI.note(act, "暂无保存的目录，填入路径后点保存"));
+            return;
         }
-        act.homePage().refreshDisk();
+        for (int i = 0; i < dirs.size(); i++) {
+            final int idx = i;
+            String[] parts = dirs.get(i).split("\\|", 2);
+            String path = parts.length > 0 ? parts[0] : "";
+            boolean del = parts.length > 1 && "1".equals(parts[1]);
+            LinearLayout row = UI.row(act);
+            row.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
+            TextView nm = UI.data(act, Util.shortPath(path) + (del ? "（整个）" : "（内容）"),
+                    Theme.T_DATA_S, Theme.MUTED);
+            nm.setSingleLine(true);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            row.addView(nm, new LinearLayout.LayoutParams(0, UI.WC, 1f));
+            Button delBtn = UI.danger(act, "×");
+            delBtn.setTextSize(13);
+            LinearLayout.LayoutParams dp = UI.lp(Theme.dp(act, 32), Theme.dp(act, 28));
+            delBtn.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { act.store.removeCleanDir(idx); renderSavedCleanDirs(); }
+            });
+            row.addView(delBtn, dp);
+            savedDirList.addView(row);
+        }
     }
 }
-

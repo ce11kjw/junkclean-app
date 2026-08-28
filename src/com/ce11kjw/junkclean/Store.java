@@ -73,7 +73,10 @@ public class Store {
 
     private String joinForSet(List<String> list) {
         StringBuilder b = new StringBuilder();
-        for (String s : list) { if (b.length() > 0) b.append('\n'); b.append(s); }
+        for (String s : list) {
+            if (b.length() > 0) b.append("\n");
+            b.append(s);
+        }
         return b.toString();
     }
 
@@ -186,6 +189,35 @@ public class Store {
         return sp.getString("orgSrc", Util.sdRoot() + "/下载");
     }
     public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
+
+    // ---------- 文件清理：保存待清理目录 ----------
+    /** 每行：路径|1(删整个目录)/0(只删内容) */
+    public List<String> savedCleanDirs() { return split(sp.getString("savedCleanDirs", "")); }
+    public void saveCleanDir(String path, boolean delItself) {
+        List<String> list = savedCleanDirs();
+        String line = path + "|" + (delItself ? "1" : "0");
+        // 去重：同路径替换
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).startsWith(path + "|")) { list.set(i, line); return; }
+        }
+        list.add(line);
+        sp.edit().putString("savedCleanDirs", joinList(list)).apply();
+    }
+    public void removeCleanDir(int index) {
+        List<String> list = savedCleanDirs();
+        if (index >= 0 && index < list.size()) list.remove(index);
+        sp.edit().putString("savedCleanDirs", joinList(list)).apply();
+    }
+    public void clearCleanDirs() { sp.edit().remove("savedCleanDirs").apply(); }
+
+    private String joinList(List<String> list) {
+        StringBuilder b = new StringBuilder();
+        for (String s : list) {
+            if (b.length() > 0) b.append("\n");
+            b.append(s);
+        }
+        return b.toString();
+    }
 
     // ---------- 定时清理：开关 + 间隔（分钟）+ 下次执行时间戳 ----------
     /** 重复文件感知哈希阈值：0=关闭，1=严格，12=默认，24=宽松 */
@@ -410,9 +442,4 @@ public class Store {
         return b.toString();
     }
 
-    private String joinList(List<String> list) {
-        StringBuilder b = new StringBuilder();
-        for (String s : list) { if (b.length() > 0) b.append('\n'); b.append(s); }
-        return b.toString();
-    }
 }
