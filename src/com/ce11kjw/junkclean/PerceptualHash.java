@@ -150,17 +150,6 @@ public final class PerceptualHash {
         }
     }
 
-    private static Bitmap extractFrame(File f) {
-        MediaMetadataRetriever r = new MediaMetadataRetriever();
-        try {
-            r.setDataSource(f.getAbsolutePath());
-            return r.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-        } catch (Throwable ignored) {
-            return null;
-        } finally {
-            try { r.release(); } catch (Exception ignored) {}
-        }
-    }
 
     /**
      * 预处理（抗滤镜/亮度变化）：
