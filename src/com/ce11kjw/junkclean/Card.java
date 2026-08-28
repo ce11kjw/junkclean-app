@@ -41,9 +41,9 @@ public class Card extends LinearLayout {
 
         // 模糊带：边缘 6dp 羽化的暗色矩形，制造「中心清、边缘柔」的隔热毯
         blurPaint.setColor(Theme.light ? Color.argb(0x24, 0, 0, 0)
-                                       : Color.argb(0x3C, 0, 0, 0));
+                                       : Color.argb(Theme.ga(0x3C), 0, 0, 0));
         blurPaint.setMaskFilter(new BlurMaskFilter(
-                Theme.dp(c, 6), BlurMaskFilter.Blur.NORMAL));
+                Theme.dp(c, Theme.glassBlur), BlurMaskFilter.Blur.NORMAL));
 
         // 内芯外圈描边：1dp，强化面板轮廓
         edgePaint.setStyle(Paint.Style.STROKE);

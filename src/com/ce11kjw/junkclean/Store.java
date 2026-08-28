@@ -106,6 +106,18 @@ public class Store {
     public String accent() { return sp.getString("accent", "emerald"); }
     public void setAccent(String a) { sp.edit().putString("accent", a).apply(); }
 
+    /** 玻璃模式：0=关 1=浅色玻璃 2=深色玻璃 */
+    public int glassMode() { return sp.getInt("glassMode", 2); }
+    public void setGlassMode(int m) { sp.edit().putInt("glassMode", m).apply(); }
+
+    /** 玻璃穿透度 0..1（存 0..100 整数避免精度漂移） */
+    public float glassOpacity() { return sp.getInt("glassOpacity", 18) / 100f; }
+    public void setGlassOpacity(float v) { sp.edit().putInt("glassOpacity", (int)(v * 100)).apply(); }
+
+    /** 玻璃边缘模糊半径 dp：0/3/6/10 */
+    public int glassBlur() { return sp.getInt("glassBlur", 6); }
+    public void setGlassBlur(int b) { sp.edit().putInt("glassBlur", b).apply(); }
+
     // ---------- 重复文件保留策略 ----------
     public String keepPolicy() { return sp.getString("keepPolicy", "newest"); }
     public void setKeepPolicy(String p) { sp.edit().putString("keepPolicy", p).apply(); }

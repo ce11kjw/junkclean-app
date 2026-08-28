@@ -94,9 +94,10 @@ public class SettingsPage extends PageBase {
     private View themeCard() {
         LinearLayout c = UI.card(act);
 
+        // 主题
+        c.addView(UI.eyebrow(act, "主题"));
         LinearLayout tRow = UI.row(act);
-        tRow.addView(UI.eyebrow(act, "主题"),
-                new LinearLayout.LayoutParams(Theme.dp(act, 50), UI.WC));
+        tRow.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
         String[][] themes = {{"dark","深色"},{"oled","OLED"},{"light","浅色"}};
         String curTheme = act.store.theme();
         for (String[] t : themes) {
@@ -114,9 +115,10 @@ public class SettingsPage extends PageBase {
         }
         c.addView(tRow);
 
+        // 强调色
+        c.addView(UI.eyebrow(act, "强调色"), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
         LinearLayout aRow = UI.row(act);
-        aRow.addView(UI.eyebrow(act, "强调色"),
-                new LinearLayout.LayoutParams(Theme.dp(act, 50), UI.WC));
+        aRow.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
         String[][] accents = {{"emerald","青绿"},{"violet","紫"},{"blue","蓝"},{"pink","粉"}};
         String curAccent = act.store.accent();
         for (String[] a : accents) {
@@ -132,12 +134,44 @@ public class SettingsPage extends PageBase {
             lp.rightMargin = Theme.dp(act, 5);
             aRow.addView(b, lp);
         }
-        c.addView(aRow, UI.lpm(act, UI.MP, UI.WC, 8));
+        c.addView(aRow);
+
+        // 玻璃模式
+        c.addView(UI.eyebrow(act, "玻璃模式"), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+        LinearLayout mode = UI.glassModeSegmented(act, act.store.glassMode(),
+                new UI.Callback<Integer>() {
+            public void call(Integer v) {
+                act.store.setGlassMode(v);
+                act.applyThemeAndRebuild();
+            }
+        });
+        c.addView(mode, UI.lpm(act, UI.MP, UI.WC, 0));
+
+        // 穿透度
+        c.addView(UI.eyebrow(act, "穿透度"), UI.lpm(act, UI.MP, UI.WC, Theme.S4));
+        LinearLayout opa = UI.glassSlider(act, "卡片穿透 9% → 100%",
+                9, 100, (int) (act.store.glassOpacity() * 100),
+                new UI.Callback<Integer>() {
+            public void call(Integer v) {
+                act.store.setGlassOpacity(v / 100f);
+                act.applyThemeAndRebuild();
+            }
+        });
+        c.addView(opa, UI.lpm(act, UI.MP, UI.WC, 0));
+
+        // 模糊带强度
+        c.addView(UI.eyebrow(act, "模糊带强度"), UI.lpm(act, UI.MP, UI.WC, Theme.S4));
+        LinearLayout blur = UI.glassBlurSegmented(act, act.store.glassBlur(),
+                new UI.Callback<Integer>() {
+            public void call(Integer v) {
+                act.store.setGlassBlur(v);
+                act.applyThemeAndRebuild();
+            }
+        });
+        c.addView(blur, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+
         return c;
     }
-
-    // ---------- 壁纸 ----------
-
     private View wallpaperCard() {
         LinearLayout c = UI.card(act);
         c.addView(UI.note(act, "填图片直链，按屏幕居中裁剪不拉伸；启用后卡片转为半透明玻璃"));

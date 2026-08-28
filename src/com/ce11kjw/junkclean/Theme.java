@@ -40,8 +40,19 @@ public final class Theme {
     public static int DANGER   = 0xFFF3576B;
 
     public static boolean light = false;
-    /** 壁纸启用时为 true：面板转半透明玻璃 */
-    public static boolean glass = false;
+
+    /** 玻璃模式：完全关闭 / 浅色玻璃 / 深色玻璃 */
+    public static final int GLASS_OFF  = 0;
+    public static final int GLASS_LIGHT = 1;
+    public static final int GLASS_DARK  = 2;
+    public static int glassMode = GLASS_DARK;
+    public static boolean glass = (glassMode != GLASS_OFF);
+
+    /** 穿透度：0.0 卡片全实色，1.0 几乎全透。默认 0.18 平衡 */
+    public static float glassOpacity = 0.18f;
+
+    /** 边缘模糊半径 dp：0 硬边，3 微羽化，6 默认，10 强玻璃 */
+    public static int glassBlur = 6;
 
     // ---------- 字号（8 档，最大 32sp） ----------
     public static final float T_DISPLAY  = 32f;
@@ -110,7 +121,33 @@ public final class Theme {
 
     private Theme() {}
 
+    /**
+     * 应用主题/强调色/玻璃配置
+     * @param theme dark / oled / light
+     * @param accent emerald / violet / blue / pink
+     * @param gMode GLASS_OFF/LIGHT/DARK
+     * @param opacity 0..1，玻璃穿透度
+     * @param blurDp 0/3/6/10 模糊半径
+     */
+    public static void apply(String theme, String accent, int gMode, float opacity, int blurDp) {
+        glassMode = gMode;
+        glassOpacity = Math.max(0f, Math.min(1f, opacity));
+        glassBlur = blurDp;
+        glass = (glassMode != GLASS_OFF);
+        // 浅色玻璃主题：底色偏白；深色玻璃：底色偏石墨
+        if (gMode == GLASS_LIGHT) light = true;
+        else if (gMode == GLASS_DARK) light = false;
+        else light = "light".equals(theme);
+        applyTheme(theme, accent);
+    }
+
+    /** 兼容旧调用：保留以不破坏其他代码 */
     public static void apply(String theme, String accent) {
+        apply(theme, accent, glassMode, glassOpacity, glassBlur);
+    }
+
+    /** 仅切换主题与强调色（不触碰玻璃配置） */
+    public static void applyTheme(String theme, String accent) {
         if ("oled".equals(theme)) {
             VOID = 0xFF000000; BG = 0xFF000000;
             PANEL = 0xFF0B0D14; GLASS = 0xFF12151F; SURFACE2 = 0xFF191D28;
@@ -152,6 +189,19 @@ public final class Theme {
         return (color & 0x00FFFFFF) | (a << 24);
     }
 
+    /**
+     * 按当前 glassOpacity 缩放 alpha。
+     * 0 → 卡片完全不透明（实色），1 → 按原始 a 透出来。
+     * 防止穿透度滑到 1 时透明度溢出（>0xFF）。
+     */
+    public static int ga(int a) {
+        if (glassMode == GLASS_OFF) return 0xFF;
+        int scaled = (int) (a * glassOpacity + (1 - glassOpacity) * 0xC8);
+        if (scaled > 0xFF) scaled = 0xFF;
+        if (scaled < 0) scaled = 0;
+        return scaled;
+    }
+
     /** 两色按比例混合，t=0 取 a，t=1 取 b */
     public static int mix(int a, int b, float t) {
         int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
@@ -173,8 +223,8 @@ public final class Theme {
     public static Drawable shell(Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(c, R_SHELL));
-        g.setColor(glass ? alpha(light ? 0xFFFFFF : 0x10131E, light ? 0x5E : 0x6E) : PANEL);
-        g.setStroke(Math.max(1, dp(c, 0.8f)), glass ? alpha(0xFFFFFF, light ? 0x9E : 0x22) : HAIRLINE);
+        g.setColor(glass ? alpha(light ? 0xFFFFFF : 0x10131E, ga(light ? 0x5E : 0x6E)) : PANEL);
+        g.setStroke(Math.max(1, dp(c, 0.8f)), glass ? alpha(0xFFFFFF, ga(light ? 0x9E : 0x22)) : HAIRLINE);
         return g;
     }
 
@@ -184,16 +234,16 @@ public final class Theme {
         GradientDrawable base = new GradientDrawable();
         base.setCornerRadius(r);
         if (glass) {
-            base.setColor(alpha(light ? 0xFFFFFF : 0x14141E, light ? 0x60 : 0x16));
-            base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0xD2 : 0x30));
+            base.setColor(alpha(light ? 0xFFFFFF : 0x14141E, ga(light ? 0x60 : 0x16)));
+            base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, ga(light ? 0xD2 : 0x30)));
         } else {
             base.setColor(GLASS);
             base.setStroke(Math.max(1, dp(c, 0.8f)), EDGE);
         }
         GradientDrawable gloss = new GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                new int[]{alpha(0xFFFFFF, light ? 0x00 : 0x1C),
-                          alpha(0xFFFFFF, 0x06),
+                new int[]{alpha(0xFFFFFF, ga(light ? 0x00 : 0x1C)),
+                          alpha(0xFFFFFF, ga(0x06)),
                           alpha(0xFFFFFF, 0x00)});
         gloss.setCornerRadius(r);
         return new LayerDrawable(new Drawable[]{base, gloss});
@@ -204,9 +254,9 @@ public final class Theme {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(c, R_ITEM));
         if (pressed) {
-            g.setColor(alpha(light ? 0x000000 : 0xFFFFFF, light ? 0x0E : 0x16));
+            g.setColor(alpha(light ? 0x000000 : 0xFFFFFF, ga(light ? 0x0E : 0x16)));
         } else {
-            g.setColor(glass ? alpha(light ? 0xFFFFFF : 0xFFFFFF, light ? 0x8A : 0x0A) : SURFACE2);
+            g.setColor(glass ? alpha(0xFFFFFF, ga(light ? 0x8A : 0x0A)) : SURFACE2);
         }
         return g;
     }
@@ -231,9 +281,9 @@ public final class Theme {
     public static Drawable ghostBtn(Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(c, R_PILL));
-        g.setColor(glass ? alpha(0xFFFFFF, light ? 0x8A : 0x12) : SURFACE2);
+        g.setColor(glass ? alpha(0xFFFFFF, ga(light ? 0x8A : 0x12)) : SURFACE2);
         g.setStroke(Math.max(1, dp(c, 0.8f)),
-                glass ? alpha(0xFFFFFF, light ? 0x00 : 0x2A) : alpha(0xFFFFFF, light ? 0x00 : 0x1E));
+                glass ? alpha(0xFFFFFF, ga(light ? 0x00 : 0x2A)) : alpha(0xFFFFFF, ga(light ? 0x00 : 0x1E)));
         return g;
     }
 
@@ -257,9 +307,9 @@ public final class Theme {
         float r = dp(c, R_SHELL);
         GradientDrawable base = new GradientDrawable();
         base.setCornerRadius(r);
-        base.setColor(glass ? alpha(light ? 0xFFFFFF : 0x171B27, light ? 0xF4 : 0xEE)
+        base.setColor(glass ? alpha(light ? 0xFFFFFF : 0x171B27, ga(light ? 0xF4 : 0xEE))
                             : (light ? 0xFFFFFFFF : 0xFF171B27));
-        base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0x00 : 0x3A));
+        base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, ga(light ? 0x00 : 0x3A)));
         GradientDrawable gloss = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{alpha(0xFFFFFF, light ? 0x00 : 0x18), alpha(0xFFFFFF, 0x00)});
@@ -271,9 +321,9 @@ public final class Theme {
     public static Drawable navBar(Context c) {
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(c, R_PILL));
-        g.setColor(glass ? alpha(light ? 0xFFFFFF : 0x0C0F18, light ? 0xE0 : 0xD8)
+        g.setColor(glass ? alpha(light ? 0xFFFFFF : 0x0C0F18, ga(light ? 0xE0 : 0xD8))
                          : (light ? 0xFFE7E9F0 : 0xFF141824));
-        g.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0x00 : 0x1E));
+        g.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, ga(light ? 0x00 : 0x1E)));
         return g;
     }
 
