@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -79,38 +80,53 @@ public class ScanEngine {
         final java.util.concurrent.Semaphore gate =
                 new java.util.concurrent.Semaphore(4);
 
+        final java.util.List<Thread> tasks = new CopyOnWriteArrayList<Thread>();
         for (final JunkCategory c : pending) {
-            new Thread(new Runnable() {
+            final Thread t = new Thread(new Runnable() {
                 public void run() {
                     try {
                         gate.acquire();
-                        if (cb == null || !cb.cancelled()) {
-                            if (!(c.needRoot && !root)) {
-                                try { runCategory(c); } catch (Throwable ignored) {}
-                            }
-                            int n = done.incrementAndGet();
-                            if (cb != null) {
-                                // items 是 synchronizedList，遍历时必须显式持锁，
-                                // 否则并发写入会抛 ConcurrentModificationException
-                                int items = 0;
-                                long bytes = 0;
-                                for (JunkCategory k : pending) {
-                                    synchronized (k.items) {
-                                        items += k.items.size();
-                                        for (JunkItem it : k.items) bytes += it.size;
-                                    }
+                        if (cb != null && cb.cancelled()) return;
+                        if (!(c.needRoot && !root)) {
+                            try { runCategory(c, cb); } catch (Throwable ignored) {}
+                        }
+                        int n = done.incrementAndGet();
+                        if (cb != null) {
+                            int items = 0;
+                            long bytes = 0;
+                            for (JunkCategory k : pending) {
+                                synchronized (k.items) {
+                                    items += k.items.size();
+                                    for (JunkItem it : k.items) bytes += it.size;
                                 }
-                                cb.onCategory(c.name, n, total, items, bytes);
                             }
+                            cb.onCategory(c.name, n, total, items, bytes);
                         }
                     } catch (InterruptedException ignored) {
+                        return;
                     } finally {
                         gate.release();
                         latch.countDown();
                     }
                 }
-            }).start();
+            });
+            tasks.add(t);
+            t.start();
         }
+
+        // 取消时 Thread.interrupt() 唤醒 acquire 与 latch.await
+        Thread cancelWatcher = new Thread(new Runnable() {
+            public void run() {
+                while (latch.getCount() > 0) {
+                    if (cb != null && cb.cancelled()) {
+                        for (Thread t : tasks) t.interrupt();
+                        return;
+                    }
+                    try { Thread.sleep(80); } catch (InterruptedException ignored) { return; }
+                }
+            }
+        });
+        cancelWatcher.start();
         // 分段轮询而非一次性长等待：取消后立刻返回已扫到的部分，
         // 原来要干等到 10 分钟超时才响应
         try {
@@ -132,7 +148,8 @@ public class ScanEngine {
         return Finder.inWhitelist(whitelist, nameOrPath);
     }
 
-    private void runCategory(JunkCategory c) {
+    private void runCategory(JunkCategory c, ScanEngine.Progress cb) {
+        if (cb != null && cb.cancelled()) return;
         if ("cache".equals(c.id))          scanAppCache(c);
         else if ("webview".equals(c.id))   scanWebView(c);
         else if ("log".equals(c.id))       scanLogs(c);

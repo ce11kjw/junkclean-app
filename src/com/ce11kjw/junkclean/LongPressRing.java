@@ -51,6 +51,8 @@ public class LongPressRing extends View {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+            case MotionEvent.ACTION_OUTSIDE:
+            case MotionEvent.ACTION_POINTER_UP:
                 cancel();
                 break;
         }

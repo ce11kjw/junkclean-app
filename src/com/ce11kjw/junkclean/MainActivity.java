@@ -19,7 +19,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "3.0.1";
+    public static final String VERSION = "3.0.2";
 
     private FrameLayout content;
     private static final int TAB_N = 5;
@@ -86,8 +86,16 @@ public class MainActivity extends Activity {
         switchTab(0);
     }
 
+    /** 主题/壁纸切换重建时清掉旧的 Handler 队列，避免旧 Runnable 持有旧实例 */
+    private void clearPendingCallbacks() {
+        if (handler != null) handler.removeCallbacksAndMessages(null);
+    }
+    private final android.os.Handler handler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
     /** 壁纸变更后重建界面 */
     void applyWallpaperAndRebuild() {
+        clearPendingCallbacks();
         Wallpaper.invalidate();
         Theme.glass = Wallpaper.exists(this);
         build();
@@ -96,6 +104,7 @@ public class MainActivity extends Activity {
 
     /** 主题变更后重建界面 */
     void applyThemeAndRebuild() {
+        clearPendingCallbacks();
         Theme.apply(store.theme(), store.accent());
         Theme.glass = Wallpaper.exists(this);
         Wallpaper.invalidate();
@@ -250,5 +259,13 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (current != 0) { switchTab(0); return; }
         super.onBackPressed();
+    }
+
+    @Override
+    protected void onDestroy() {
+        clearPendingCallbacks();
+        Wallpaper.invalidate();
+        Util.clearSizeCache();
+        super.onDestroy();
     }
 }
