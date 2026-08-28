@@ -134,14 +134,8 @@ public final class Finder {
                                          boolean full, int depth) {
         List<JunkItem> out = new ArrayList<JunkItem>();
 
-        if (full && Shell.hasRoot()) {
-            for (String p : SYSTEM_ROOTS) {
-                if (!new File(p).isDirectory()) continue;
-                long s = Shell.du(p);
-                if (s > 0) out.add(mk(p, p, s));
-            }
-        }
-
+        // 用户一级目录先排：用户最关心的是 sdcard 上自己装的应用占了多少。
+        // 系统分区放后面，否则 /data/* 这种几十 GB 的目录会把用户目录挤掉。
         List<JunkItem> firstLevel = new ArrayList<JunkItem>();
         File[] fs = new File(root).listFiles();
         if (fs != null) {
@@ -155,7 +149,22 @@ public final class Finder {
         Collections.sort(firstLevel, BY_SIZE);
         out.addAll(firstLevel);
 
-        // 展开前几个大目录的下一级，帮助定位真正占空间的位置
+        // 系统分区放最后（如果全盘模式），单独标 [系统] 前缀
+        if (full && Shell.hasRoot()) {
+            List<JunkItem> sysList = new ArrayList<JunkItem>();
+            for (String p : SYSTEM_ROOTS) {
+                if (!new File(p).isDirectory()) continue;
+                long s = Shell.du(p);
+                if (s > 0) sysList.add(mk(p, "[系统] " + p, s));
+            }
+            // 用户目录已先填 out，系统目录追加在末尾，不再霸占顶部
+            for (JunkItem s : sysList) {
+                s.checked = false;
+                out.add(s);
+            }
+        }
+
+        // 展开用户一级目录的前 6 个，帮助定位真正占空间的位置
         if (depth >= 2) {
             int expand = Math.min(6, firstLevel.size());
             for (int i = 0; i < expand; i++) {
@@ -167,8 +176,9 @@ public final class Finder {
                     if (!k.isDirectory() || k.getName().startsWith(".")) continue;
                     if (inWhitelist(wl, k.getName())) continue;
                     long s = Util.dirSize(k);
-                    // 只保留占父目录 8% 以上且大于 8MB 的子目录，避免列表被碎片淹没
-                    if (s > 8388608L && s * 100 / Math.max(1, parent.size) >= 8) {
+                    // 保留占父目录 5% 以上且大于 4MB 的子目录：之前 8MB/8% 太严，
+                    // 小容量设备看不到任何展开
+                    if (s > 4194304L && s * 100 / Math.max(1, parent.size) >= 5) {
                         subs.add(mk(k.getAbsolutePath(),
                                 parent.name + " / " + k.getName(), s));
                     }

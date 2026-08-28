@@ -184,7 +184,7 @@ public final class Theme {
         GradientDrawable base = new GradientDrawable();
         base.setCornerRadius(r);
         if (glass) {
-            base.setColor(alpha(light ? 0xFFFFFF : 0x1E2333, light ? 0xC8 : 0x66));
+            base.setColor(alpha(light ? 0xFFFFFF : 0x14141E, light ? 0x60 : 0x16));
             base.setStroke(Math.max(1, dp(c, 0.8f)), alpha(0xFFFFFF, light ? 0xD2 : 0x30));
         } else {
             base.setColor(GLASS);
