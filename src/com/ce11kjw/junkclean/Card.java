@@ -39,17 +39,24 @@ public class Card extends LinearLayout {
         pad = Theme.dp(c, Theme.SHELL_PAD);
         setPadding(pad, pad, pad, pad);
 
-        // 模糊带：边缘 6dp 羽化的暗色矩形，制造「中心清、边缘柔」的隔热毯
-        blurPaint.setColor(Theme.light ? Color.argb(0x24, 0, 0, 0)
-                                       : Color.argb(Theme.ga(0x3C), 0, 0, 0));
+        // 模糊带 alpha：玻璃感低（实色卡片）下保持低调；玻璃感高（真玻璃）
+        // 下仍可见一缕暗色形成层次。亮主题略强，暗主题略弱。
+        int blurA;
+        if (Theme.glass >= 0.5f) {
+            blurA = Theme.light ? 0x24 : 0x20;
+        } else {
+            int base = Theme.light ? 0x40 : 0x30;
+            blurA = Math.max(0, (int) (base * Theme.glass));
+        }
+        blurPaint.setColor(Color.argb(blurA, 0, 0, 0));
         blurPaint.setMaskFilter(new BlurMaskFilter(
                 Theme.dp(c, Theme.glassBlur), BlurMaskFilter.Blur.NORMAL));
 
-        // 内芯外圈描边：1dp，强化面板轮廓
+        // 内芯外圈描边：随玻璃感增强（边框是真玻璃的视觉层次承担者）
         edgePaint.setStyle(Paint.Style.STROKE);
         edgePaint.setStrokeWidth(Theme.dp(c, 1.0f));
-        edgePaint.setColor(Theme.light ? Color.argb(0x80, 0, 0, 0)
-                                       : Color.argb(0x40, 0xFF, 0xFF, 0xFF));
+        int edgeBase = Theme.light ? 0x80 : 0x40;
+        edgePaint.setColor(Color.argb(Theme.gaEdge(edgeBase), 0xFF, 0xFF, 0xFF));
         edgePaint.setAntiAlias(true);
 
         coreLayout = new InnerCore(c);

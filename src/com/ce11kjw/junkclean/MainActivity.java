@@ -19,7 +19,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "3.0.7";
+    public static final String VERSION = "3.0.8";
 
     private FrameLayout content;
     private static final int TAB_N = 5;

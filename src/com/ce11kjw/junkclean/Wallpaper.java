@@ -38,8 +38,11 @@ public final class Wallpaper {
         String u = url.trim();
         if (!u.startsWith("http://") && !u.startsWith("https://")) return "仅支持 http(s) 直链";
 
-        byte[] data = Net.download(u, 20000, 16 * 1024 * 1024);
-        if (data == null) return "下载失败或超过 16MB";
+        byte[] data = Net.download(u, 30000, 16 * 1024 * 1024);
+        if (data == null) {
+            String reason = Net.lastError.isEmpty() ? "下载失败" : Net.lastError;
+            return "下载失败：" + reason;
+        }
 
         BitmapFactory.Options probe = new BitmapFactory.Options();
         probe.inJustDecodeBounds = true;
