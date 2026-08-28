@@ -89,8 +89,11 @@ public final class Updater {
     public static volatile String lastError = "";
 
     /** 下载 APK 到公共下载目录，返回文件；失败返回 null */
+    public static String lastWritePath = "";
+
     public static File download(Context c, String url, Net.Progress cb) {
         lastError = "";
+        lastWritePath = "";
         byte[] data = Net.download(url, 120000, 128 * 1024 * 1024, cb);
         if (data == null) {
             lastError = Net.lastError.isEmpty() ? "网络错误" : Net.lastError;
@@ -127,6 +130,7 @@ public final class Updater {
             out.write(data);
             out.close();
             f.setReadable(true, false);
+            lastWritePath = f.getAbsolutePath();
             return f;
         } catch (Exception e) {
             lastError = "写入失败：" + e.getMessage();
@@ -183,8 +187,9 @@ public final class Updater {
         }
     }
 
-    /** 返回更新包可能所在的路径，供 UI 提示 */
+    /** 返回更新包实际写入路径（fallback 到私有目录时也正确） */
     public static String publicApkPath() {
-        return Util.sdRoot() + "/Download/JunkClean-update.apk";
+        return lastWritePath != null && !lastWritePath.isEmpty()
+                ? lastWritePath : Util.sdRoot() + "/Download/JunkClean-update.apk";
     }
 }

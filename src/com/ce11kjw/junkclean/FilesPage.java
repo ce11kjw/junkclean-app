@@ -21,7 +21,7 @@ public class FilesPage extends PageBase {
     private ScrollView scroll;
 
     // 大文件
-    private EditText bigMin, bigSearch, brSearch;
+    private EditText bigMin, bigSearch;
     private LinearLayout bigList;
     private TextView bigSum;
     private final List<JunkItem> bigItems = new ArrayList<JunkItem>();
@@ -51,12 +51,9 @@ public class FilesPage extends PageBase {
             new ArrayList<QualityDetect.Verdict>();
 
     // 文件清理（目录浏览）
-    private LinearLayout brList;
-    private TextView brSum;
     private android.widget.EditText brPath;
     private String brCur;
     private List<Browser.Entry> brItems = new ArrayList<Browser.Entry>();
-    private boolean brDirSize = true;
 
     public FilesPage(MainActivity a) {
         super(a);

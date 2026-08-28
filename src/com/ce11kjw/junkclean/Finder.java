@@ -399,13 +399,16 @@ public final class Finder {
         if (fs == null) return;
         for (File f : fs) {
             String n = f.getName();
-            if (!f.isDirectory() || n.startsWith(".")) continue;
+            if (!f.isDirectory()) continue;
             String low = n.toLowerCase(java.util.Locale.US);
-            // 命中缩略图特征目录
+            // 命中缩略图特征目录（必须先检查，因为 .thumbnails 是隐藏目录）
             if (low.equals(".thumbnails") || low.equals(".face")
                     || (low.contains("thumbnail") && f.length() > 0)) {
                 found.add(f.getAbsolutePath());
+                continue;
             }
+            // 跳过隐藏目录（除了上面已处理的缩略图目录）
+            if (n.startsWith(".")) continue;
             // 只递归常见媒体目录
             if (low.equals("dcim") || low.equals("pictures") || low.equals("camera")
                     || low.equals("weixin") || low.equals("tencent") || low.equals("miui")

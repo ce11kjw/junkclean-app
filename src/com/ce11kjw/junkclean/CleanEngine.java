@@ -120,7 +120,12 @@ public class CleanEngine {
 
     /** 执行 root 批量删除并校验结果，只有真正消失的才计入释放量 */
     private void flush(StringBuilder batch, Result r) {
-        if (batch.length() == 0 || !root) {
+        // !root 时 pendingRoot 不会被填充（step 只在 root 分支加入），直接返回
+        if (!root || pendingRoot.isEmpty()) {
+            pendingRoot.clear();
+            return;
+        }
+        if (batch.length() == 0) {
             for (Object[] p : pendingRoot) r.errors.add(Util.shortPath((String) p[0]));
             pendingRoot.clear();
             return;
