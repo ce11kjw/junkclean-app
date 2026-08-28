@@ -43,6 +43,13 @@ public class FilesPage extends PageBase {
 
     // 安装包
 
+    // 低质量图片
+    private TextView qualitySum;
+    private LinearLayout qualityList;
+    private final List<JunkItem> qualityItems = new ArrayList<JunkItem>();
+    private final List<QualityDetect.Verdict> qualityVerdicts =
+            new ArrayList<QualityDetect.Verdict>();
+
     // 文件清理（目录浏览）
     private LinearLayout brList;
     private TextView brPath, brSum;
@@ -73,6 +80,8 @@ public class FilesPage extends PageBase {
         root.addView(bigCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "重复文件"));
         root.addView(dupCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        root.addView(UI.section(act, "低质量图片"));
+        root.addView(qualityCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "空文件与空目录"));
         root.addView(emptyCard(), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         root.addView(UI.section(act, "文件清理"));
@@ -552,6 +561,64 @@ public class FilesPage extends PageBase {
 
 
     // ---------- 文件清理 ----------
+
+    /**
+     * 低质量图片识别（photoo 思路）：
+     * 模糊（边缘稀疏）、暗光（亮度低）、过曝（高亮像素多）三轴判定。
+     * 本地像素分析，不上传任何图片。
+     */
+    private View qualityCard() {
+        LinearLayout c = UI.card(act);
+        c.addView(UI.eyebrow(act, "低质量图片"));
+        c.addView(UI.title(act, "模糊/暗光/过曝"), UI.lpm(act, UI.MP, UI.WC, 2));
+        c.addView(UI.note(act, "基于像素灰度+边缘密度判别，纯本地计算"), UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+
+        Button scan = UI.primary(act, "扫描低质量图片");
+        scan.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { scanQuality(); }
+        });
+        c.addView(scan, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S3));
+
+        qualitySum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(qualitySum, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        qualityList = UI.col(act);
+        c.addView(qualityList, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+
+        Button del = UI.danger(act, "清理选中");
+        del.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                removeItems(qualityItems, qualityList, qualitySum, false);
+            }
+        });
+        c.addView(del, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+        return c;
+    }
+
+    private void scanQuality() {
+        qualityItems.clear();
+        qualityVerdicts.clear();
+        qualityList.removeAllViews();
+        qualitySum.setText("扫描中...");
+        new Thread(new Runnable() {
+            public void run() {
+                final java.util.List<JunkItem> found =
+                        new java.util.ArrayList<JunkItem>();
+                QualityDetect.scan(scanRoot(), wl(), found, qualityVerdicts);
+                post(new Runnable() {
+                    public void run() {
+                        qualityItems.addAll(found);
+                        if (qualityItems.isEmpty()) {
+                            qualitySum.setText("没有发现低质量图片");
+                            qualityList.addView(UI.empty(act, "图片质量都还不错"));
+                        } else {
+                            qualitySum.setText(qualityItems.size() + " 张");
+                            rebuild(qualityItems, qualityList, qualitySum);
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
 
     private View browseCard() {
         LinearLayout c = UI.card(act);

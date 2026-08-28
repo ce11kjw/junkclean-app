@@ -250,6 +250,12 @@ public final class Finder {
 
     public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
                                             List<String> wl, boolean full) {
+        return duplicates(root, minSize, maxGroups, wl, full, null);
+    }
+
+    /** 带增量缓存版本：cache 复用上次哈希 */
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl, boolean full, HashCache cache) {
         Map<Long, List<File>> bySize = new HashMap<Long, List<File>>();
         for (String r : roots(root, full)) {
             collectBySize(new File(r), 0, bySize, minSize, wl);
@@ -258,10 +264,10 @@ public final class Finder {
         List<DupGroup> groups = new ArrayList<DupGroup>();
         for (Map.Entry<Long, List<File>> e : bySize.entrySet()) {
             if (e.getValue().size() < 2) continue;
-            // 同桶文件并发算哈希：单文件哈希是 IO 密集型，串行时 CPU 空等
+            // 同桶文件并发算哈希：cache 命中则直接复用，不读磁盘
             final Map<String, List<File>> byHash =
                     java.util.Collections.synchronizedMap(new HashMap<String, List<File>>());
-            hashPool(e.getValue(), byHash);
+            hashPool(e.getValue(), byHash, cache);
             for (Map.Entry<String, List<File>> g : byHash.entrySet()) {
                 if (g.getValue().size() < 2) continue;
                 DupGroup dg = new DupGroup();
@@ -286,8 +292,15 @@ public final class Finder {
      */
     public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
                                             List<String> wl, int hashThreshold) {
+        return duplicates(root, minSize, maxGroups, wl, hashThreshold, null);
+    }
+
+    /** 带增量缓存版本：cache 复用上次哈希，二次扫描快 */
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl, int hashThreshold,
+                                            HashCache cache) {
         List<DupGroup> groups = new ArrayList<DupGroup>();
-        groups.addAll(duplicates(root, minSize, maxGroups, wl, false));
+        groups.addAll(duplicates(root, minSize, maxGroups, wl, false, cache));
         if (hashThreshold > 0 && groups.size() < maxGroups) {
             groups.addAll(visualDuplicates(root, wl, hashThreshold));
         }
@@ -295,40 +308,7 @@ public final class Finder {
     }
 
 
-    /** 并发计算一组文件的哈希并按哈希分桶 */
-    private static void hashPool(List<File> files, final Map<String, List<File>> out) {
-        if (files.size() <= 2) {
-            for (File f : files) putHash(out, Util.quickHash(f), f);
-            return;
-        }
-        // 固定 4 个 worker 从共享游标取任务，而不是每个文件一个线程。
-        // 同尺寸文件可能上百个，一文件一线程会把设备线程数打满。
-        final java.util.concurrent.atomic.AtomicInteger cursor =
-                new java.util.concurrent.atomic.AtomicInteger();
-        final List<File> work = files;
-        int workers = Math.min(4, work.size());
-        final java.util.concurrent.CountDownLatch latch =
-                new java.util.concurrent.CountDownLatch(workers);
-        for (int w = 0; w < workers; w++) {
-            new Thread(new Runnable() {
-                public void run() {
-                    try {
-                        int idx;
-                        while ((idx = cursor.getAndIncrement()) < work.size()) {
-                            File one = work.get(idx);
-                            try { putHash(out, Util.quickHash(one), one); }
-                            catch (Throwable ignored) {}
-                        }
-                    } finally {
-                        latch.countDown();
-                    }
-                }
-            }).start();
-        }
-        try {
-            latch.await(90, java.util.concurrent.TimeUnit.SECONDS);
-        } catch (InterruptedException ignored) {}
-    }
+
 
     private static void putHash(Map<String, List<File>> map, String h, File f) {
         synchronized (map) {
@@ -516,6 +496,73 @@ public final class Finder {
 
     public static final int DEFAULT_VISUAL_THRESHOLD = 12;
 
+    /**
+     * 并发计算一组文件的哈希并按哈希分桶（带增量缓存）：
+     * cache != null 时，path+size+mtime 没变直接复用上次 hash，
+     * 不读磁盘——二次扫描快一个数量级。
+     */
+    private static void hashPool(List<File> files, final Map<String, List<File>> out) {
+        hashPool(files, out, null);
+    }
+
+    private static void hashPool(List<File> files, final Map<String, List<File>> out,
+                                 final HashCache cache) {
+        if (files.size() <= 2) {
+            for (File f : files) {
+                String h = cachedHash(cache, f);
+                if (h == null) {
+                    h = Util.quickHash(f);
+                    if (cache != null) cache.put(f.getAbsolutePath(), f.length(), f.lastModified(), h, true);
+                }
+                putHash(out, h, f);
+            }
+            return;
+        }
+        // 固定 4 个 worker 从共享游标取任务，而不是每个文件一个线程。
+        final java.util.concurrent.atomic.AtomicInteger cursor =
+                new java.util.concurrent.atomic.AtomicInteger();
+        final List<File> work = files;
+        int workers = Math.min(4, work.size());
+        final java.util.concurrent.CountDownLatch latch =
+                new java.util.concurrent.CountDownLatch(workers);
+        for (int w = 0; w < workers; w++) {
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        int idx;
+                        while ((idx = cursor.getAndIncrement()) < work.size()) {
+                            File one = work.get(idx);
+                            try {
+                                String h = cachedHash(cache, one);
+                                if (h == null) {
+                                    h = Util.quickHash(one);
+                                    if (cache != null) cache.put(one.getAbsolutePath(),
+                                            one.length(), one.lastModified(), h, true);
+                                }
+                                putHash(out, h, one);
+                            } catch (Throwable ignored) {}
+                        }
+                    } finally {
+                        latch.countDown();
+                    }
+                }
+            }).start();
+        }
+        try {
+            latch.await(90, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException ignored) {}
+    }
+
+    /** 读缓存；返回 null 表示未命中或 mtime/size 变化（需重算） */
+    private static String cachedHash(HashCache cache, File f) {
+        if (cache == null) return null;
+        return cache.get(f.getAbsolutePath(), f.length(), f.lastModified());
+    }
+
+    /**
+     * 通用版：先 MD5 精确重复，再感知哈希找照片/视频相似（可选 AI 确认）。
+     * hashThreshold = 0 时关闭视觉相似；>0 时把距离 ≤ 阈值的媒体归为「可能重复」。
+     */
     /** 仅扫描图片和视频 */
     public static List<DupGroup> visualDuplicates(String root, List<String> wl,
                                                 final int threshold) {
