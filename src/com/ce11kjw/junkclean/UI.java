@@ -338,6 +338,12 @@ public static TextView empty(Context c, String s) {
         bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
             public void onProgressChanged(android.widget.SeekBar b, int p, boolean u) {
                 val.setText(p + "%");
+                // 实时更新：边拖边变化，不重建界面避免闪烁
+                Theme.glass = p / 100f;
+                if (c instanceof android.app.Activity) {
+                    android.view.View root = ((android.app.Activity) c).getWindow().getDecorView();
+                    updateGlassOnViews(root);
+                }
             }
             public void onStartTrackingTouch(android.widget.SeekBar b) {}
             public void onStopTrackingTouch(android.widget.SeekBar b) {
@@ -714,5 +720,22 @@ public static TextView empty(Context c, String s) {
 
     public interface Callback<T> {
         void call(T value);
+    }
+
+    /** 递归更新所有 Card 背景（实时玻璃预览，避免重建闪烁） */
+    private static void updateGlassOnViews(android.view.View v) {
+        if (v == null) return;
+        if (v instanceof Card) {
+            Card card = (Card) v;
+            card.setBackground(Theme.shell(v.getContext()));
+            android.widget.LinearLayout core = card.core();
+            if (core != null) core.setBackground(Theme.core(v.getContext()));
+            v.invalidate();
+        } else if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                updateGlassOnViews(g.getChildAt(i));
+            }
+        }
     }
 }

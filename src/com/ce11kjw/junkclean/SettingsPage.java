@@ -146,8 +146,8 @@ public class SettingsPage extends PageBase {
                 (int) (act.store.glass() * 100),
                 new UI.Callback<Integer>() {
             public void call(Integer v) {
+                // 拖动中已实时更新 Theme.glass；这里只持久化，不再重建（避免松手闪一下）
                 act.store.setGlass(v / 100f);
-                act.applyThemeAndRebuild();
             }
         });
         c.addView(opa, UI.lpm(act, UI.MP, UI.WC, 0));
