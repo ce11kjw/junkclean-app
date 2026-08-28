@@ -700,8 +700,13 @@ public class FilesPage extends PageBase {
     private void deleteEnteredDir() {
         final String path = brPath.getText().toString().trim();
         if (path.isEmpty()) { act.toast("请输入目录路径"); return; }
-        java.io.File f = new java.io.File(path);
-        if (!f.isAbsolute()) f = new java.io.File(Util.sdRoot(), path);
+        // 路径规则：/sdcard/.junkclean_trash/  带尾斜杠 → 只删内容，保留目录
+        //          /sdcard/.junkclean_trash   不带尾斜杠 → 删整个目录
+        boolean deleteDirItself = !path.endsWith("/") && !path.endsWith("/ ");
+        String cleanPath = path.replaceAll("/+$", "");  // 去掉尾斜杠
+
+        java.io.File f = new java.io.File(cleanPath);
+        if (!f.isAbsolute()) f = new java.io.File(Util.sdRoot(), cleanPath);
         String abs = f.getAbsolutePath();
 
         if (!f.exists() || !f.isDirectory()) {
@@ -715,33 +720,60 @@ public class FilesPage extends PageBase {
 
         long size = Util.dirSize(f);
         final String target = abs;
-        UI.confirm(act, "删除整个目录",
-                "将永久删除：\n" + Util.shortPath(target)
-                + "\n\n包含 " + Util.fmtSize(size) + " 数据，无法恢复！",
+        final boolean delItself = deleteDirItself;
+        String msg = delItself
+                ? "将永久删除整个目录：\n" + Util.shortPath(target)
+                : "将清空目录内容（保留目录本身）：\n" + Util.shortPath(target);
+        msg += "\n\n包含 " + Util.fmtSize(size) + " 数据，无法恢复！";
+        UI.confirm(act, delItself ? "删除整个目录" : "清空目录内容", msg,
                 new Runnable() {
             public void run() {
                 new Thread(new Runnable() {
                     public void run() {
-                        final CleanEngine.Result r = new CleanEngine(false).cleanItems(
-                                java.util.Collections.singletonList(
-                                        new JunkItem(target, new java.io.File(target).getName(), 0)));
-                        post(new Runnable() {
-                            public void run() {
-                                act.store.addStat(r.freed, 1);
-                                ScanEngine.invalidate();
-                                if (r.freed > 0) {
-                                    act.toast("已删除：" + Util.shortPath(target));
-                                } else {
-                                    act.toast("删除失败，试试 root 或检查权限");
-                                    if (!r.errors.isEmpty()) offerRetry(r.errors, null);
+                        if (delItself) {
+                            // 删除整个目录
+                            final CleanEngine.Result r = new CleanEngine(false).cleanItems(
+                                    java.util.Collections.singletonList(
+                                            new JunkItem(target, new java.io.File(target).getName(), 0)));
+                            post(new Runnable() {
+                                public void run() {
+                                    reportDeleteResult(r, target);
                                 }
-                                act.homePage().refreshDisk();
+                            });
+                        } else {
+                            // 只删内部文件，保留目录
+                            boolean ok = true;
+                            java.io.File dir = new java.io.File(target);
+                            java.io.File[] kids = dir.listFiles();
+                            if (kids != null) {
+                                final java.util.List<JunkItem> items = new java.util.ArrayList<JunkItem>();
+                                for (java.io.File k : kids) {
+                                    items.add(new JunkItem(k.getAbsolutePath(), k.getName(), 0));
+                                }
+                                final CleanEngine.Result r = new CleanEngine(false).cleanItems(items);
+                                post(new Runnable() {
+                                    public void run() {
+                                        reportDeleteResult(r, target);
+                                    }
+                                });
                             }
-                        });
+                        }
                     }
                 }).start();
             }
         });
+    }
+
+    private void reportDeleteResult(CleanEngine.Result r, String target) {
+        act.store.addStat(r.freed, r.count);
+        ScanEngine.invalidate();
+        if (r.count > 0 || r.freed > 0) {
+            act.toast("已处理 " + r.count + " 项 · " + Util.fmtSize(r.freed));
+        } else {
+            act.toast("删除失败，试试 root 或检查权限");
+            if (!r.errors.isEmpty()) offerRetry(r.errors, null);
+        }
+        act.homePage().refreshDisk();
     }
 }
 

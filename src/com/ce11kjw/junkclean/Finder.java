@@ -366,22 +366,53 @@ public final class Finder {
 
     public static List<JunkItem> thumbs(List<String> wl) {
         String sd = Util.sdRoot();
+        // 固定已知目录 + 递归发现 .thumbnails
+        java.util.Set<String> found = new java.util.LinkedHashSet<String>();
         String[] dirs = {
                 sd + "/DCIM/.thumbnails", sd + "/Pictures/.thumbnails", sd + "/.thumbnails",
                 sd + "/MIUI/Gallery/cloud/.cache", sd + "/Android/data/com.miui.gallery/cache",
                 sd + "/Android/data/com.google.android.apps.photos/cache",
                 sd + "/tencent/MicroMsg/Cache", sd + "/Android/data/com.tencent.mm/cache",
-                sd + "/Pictures/.face", sd + "/DCIM/.face"
+                sd + "/Pictures/.face", sd + "/DCIM/.face",
+                sd + "/DCIM/.thumbnails", sd + "/Camera/.thumbnails",
+                sd + "/WeiXin/.thumbnails", sd + "/Tencent/.thumbnails"
         };
+        for (String d : dirs) found.add(d);
+        // 递归扫描找到所有 .thumbnails 和缩略图缓存目录（最多 3 层）
+        collectThumbDirs(new File(sd), 0, found);
+
         List<JunkItem> out = new ArrayList<JunkItem>();
-        for (String d : dirs) {
+        for (String d : found) {
             File f = new File(d);
             if (!f.isDirectory()) continue;
             if (inWhitelist(wl, f.getName()) || inWhitelist(wl, d)) continue;
             long s = Util.dirSize(f);
-            if (s > 0) out.add(new JunkItem(d, Util.shortPath(d), s));
+            if (s > 65536) out.add(new JunkItem(d, Util.shortPath(d), s));
         }
         return out;
+    }
+
+    /** 递归找所有 .thumbnails / .face / thumbnail 相关目录 */
+    private static void collectThumbDirs(File dir, int depth, java.util.Set<String> found) {
+        if (depth > 3) return;
+        File[] fs = dir.listFiles();
+        if (fs == null) return;
+        for (File f : fs) {
+            String n = f.getName();
+            if (!f.isDirectory() || n.startsWith(".")) continue;
+            String low = n.toLowerCase(java.util.Locale.US);
+            // 命中缩略图特征目录
+            if (low.equals(".thumbnails") || low.equals(".face")
+                    || (low.contains("thumbnail") && f.length() > 0)) {
+                found.add(f.getAbsolutePath());
+            }
+            // 只递归常见媒体目录
+            if (low.equals("dcim") || low.equals("pictures") || low.equals("camera")
+                    || low.equals("weixin") || low.equals("tencent") || low.equals("miui")
+                    || low.equals("download")) {
+                collectThumbDirs(f, depth + 1, found);
+            }
+        }
     }
 
     // ---------- APK 管理 ----------

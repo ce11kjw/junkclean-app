@@ -170,16 +170,19 @@ public class ScanEngine {
 
     private void scanAppCache(JunkCategory c) {
         if (root) {
+            // 用单引号包裹路径避免 shell 解释，du 输出 "KB<TAB>path"
             List<String> out = Shell.exec(true,
                     "for d in /data/data/*/cache /data/data/*/code_cache; do " +
-                    "[ -d \"$d\" ] && echo \"$(du -sk \\\"$d\\\" 2>/dev/null | cut -f1)|$d\"; done");
+                    "test -d '$d' && du -sk '$d' 2>/dev/null; done");
             for (String l : out) {
-                int bar = l.indexOf('|');
-                if (bar <= 0) continue;
+                // du -sk 输出：第一列是 KB 数，之后是路径（中间有 tab 或空格）
+                // 用 split 取第一个 token
+                String[] parts = l.trim().split("\\s+", 2);
+                if (parts.length < 2) continue;
                 try {
-                    long kb = Long.parseLong(l.substring(0, bar).trim());
+                    long kb = Long.parseLong(parts[0].trim());
                     if (kb <= 4) continue;
-                    String path = l.substring(bar + 1);
+                    String path = parts[1];
                     String pkg = pkgFromPath(path);
                     if (wl(pkg)) continue;
                     c.items.add(new JunkItem(path, pkg + " / " + new File(path).getName(), kb * 1024));

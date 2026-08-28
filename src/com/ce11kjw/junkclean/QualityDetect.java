@@ -66,10 +66,10 @@ public final class QualityDetect {
             v.highlight = (float) bright / total;
             v.sharpness = (float) edge / total;
 
-            // 阈值（经验值，可调）
-            v.blurry = v.sharpness < 0.015f;
-            v.dark = v.brightness < 45f;
-            v.overexposed = v.highlight > 0.6f;
+            // 阈值（已调松：之前 0.015/45/0.6 太严，大多数照片都合格）
+            v.blurry = v.sharpness < 0.012f;
+            v.dark = v.brightness < 35f;
+            v.overexposed = v.highlight > 0.7f;
             return v;
         } finally {
             if (bm != null && !bm.isRecycled()) bm.recycle();
@@ -107,7 +107,7 @@ public final class QualityDetect {
 
     private static Bitmap load(File f) {
         BitmapFactory.Options opt = new BitmapFactory.Options();
-        opt.inSampleSize = 8;   // 64x64 就够，省内存
+        opt.inSampleSize = 4;   // 64x64 就够，省内存
         try {
             return BitmapFactory.decodeFile(f.getAbsolutePath(), opt);
         } catch (Throwable t) {
