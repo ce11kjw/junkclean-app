@@ -19,7 +19,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "3.0.6";
+    public static final String VERSION = "3.0.7";
 
     private FrameLayout content;
     private static final int TAB_N = 5;
@@ -37,8 +37,8 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         store = new Store(this);
         Theme.apply(store.theme(), store.accent(),
-                store.glassMode(), store.glassOpacity(), store.glassBlur());
-        Theme.glass = (store.glassMode() != Theme.GLASS_OFF) && Wallpaper.exists(this);
+                store.glass(), store.glassBlur());
+        Theme.glass = Wallpaper.exists(this) ? store.glass() : 0f;
         build();
         requestStorageIfNeeded();
         // 启动时按设置清理过期回收站项
@@ -98,7 +98,7 @@ public class MainActivity extends Activity {
     void applyWallpaperAndRebuild() {
         clearPendingCallbacks();
         Wallpaper.invalidate();
-        Theme.glass = Wallpaper.exists(this);
+        if (!Wallpaper.exists(this)) Theme.glass = 0f;
         build();
         switchTab(4);
     }
@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
     void applyThemeAndRebuild() {
         clearPendingCallbacks();
         Theme.apply(store.theme(), store.accent());
-        Theme.glass = Wallpaper.exists(this);
+        if (!Wallpaper.exists(this)) Theme.glass = 0f;
         Wallpaper.invalidate();
         build();
         switchTab(4);

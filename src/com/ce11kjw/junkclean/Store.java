@@ -188,6 +188,10 @@ public class Store {
     public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
 
     // ---------- 定时清理：开关 + 间隔（分钟）+ 下次执行时间戳 ----------
+    /** 玻璃感 0~1：0=实色，1=真玻璃 */
+    public float glass() { return sp.getInt("glass", 30) / 100f; }
+    public void setGlass(float v) { sp.edit().putInt("glass", (int)(v * 100)).apply(); }
+
     public boolean scheduleEnabled() { return sp.getBoolean("scheduleEnabled", false); }
     public void setScheduleEnabled(boolean b) { sp.edit().putBoolean("scheduleEnabled", b).apply(); }
 

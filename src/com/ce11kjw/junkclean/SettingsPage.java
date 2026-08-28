@@ -136,24 +136,15 @@ public class SettingsPage extends PageBase {
         }
         c.addView(aRow);
 
-        // 玻璃模式
-        c.addView(UI.eyebrow(act, "玻璃模式"), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
-        LinearLayout mode = UI.glassModeSegmented(act, act.store.glassMode(),
-                new UI.Callback<Integer>() {
-            public void call(Integer v) {
-                act.store.setGlassMode(v);
-                act.applyThemeAndRebuild();
-            }
-        });
-        c.addView(mode, UI.lpm(act, UI.MP, UI.WC, 0));
-
         // 穿透度
         c.addView(UI.eyebrow(act, "穿透度"), UI.lpm(act, UI.MP, UI.WC, Theme.S4));
-        LinearLayout opa = UI.glassSlider(act, "卡片穿透 9% → 100%",
-                9, 100, (int) (act.store.glassOpacity() * 100),
+        c.addView(UI.note(act, "0% = 实色卡片；100% = 真玻璃（几乎全透，剩边框+羽化+阴影）"),
+                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        LinearLayout opa = UI.glassSlider(act, "玻璃感 0% → 100%（真玻璃）",
+                (int) (act.store.glass() * 100),
                 new UI.Callback<Integer>() {
             public void call(Integer v) {
-                act.store.setGlassOpacity(v / 100f);
+                act.store.setGlass(v / 100f);
                 act.applyThemeAndRebuild();
             }
         });
@@ -161,7 +152,7 @@ public class SettingsPage extends PageBase {
 
         // 模糊带强度
         c.addView(UI.eyebrow(act, "模糊带强度"), UI.lpm(act, UI.MP, UI.WC, Theme.S4));
-        LinearLayout blur = UI.glassBlurSegmented(act, act.store.glassBlur(),
+        LinearLayout blur = UI.featherSegmented(act, act.store.glassBlur(),
                 new UI.Callback<Integer>() {
             public void call(Integer v) {
                 act.store.setGlassBlur(v);

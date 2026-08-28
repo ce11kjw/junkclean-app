@@ -244,7 +244,7 @@ public final class UI {
         } else {
             b.setBackground(Theme.ghostBtn(c));
             // 玻璃模式下未选中文字用半透明，让玻璃质感贯穿
-            b.setTextColor(Theme.glass ? Theme.alpha(Theme.TEXT, 0xB4) : Theme.MUTED);
+            b.setTextColor(Theme.glass > 0f ? Theme.alpha(Theme.TEXT, 0xB4) : Theme.MUTED);
         }
     }
 
@@ -285,28 +285,26 @@ public final class UI {
     }
 
     /**
-     * 玻璃滑杆：0~100 的数值，标签实时显示当前值。
-     * onChange 触发后通常需要 applyThemeAndRebuild() 重建才能看见效果。
+     * 玻璃感强度滑杆 0~100。onChange 触发后通常需要 applyThemeAndRebuild() 重建。
      */
-    public static LinearLayout glassSlider(final Context c, String label, int minVal,
-                                          int maxVal, final int initial,
-                                          final Callback<Integer> onChange) {
+    public static LinearLayout glassSlider(final Context c, String label,
+                                          int initial,
+                                          final UI.Callback<Integer> onChange) {
         LinearLayout col = col(c);
         col.addView(eyebrow(c, label));
         LinearLayout row = row(c);
         row.setPadding(0, Theme.dp(c, 2), 0, Theme.dp(c, 2));
         android.widget.SeekBar bar = new android.widget.SeekBar(c);
-        bar.setMax(maxVal - minVal);
-        bar.setProgress(initial - minVal);
-        final android.widget.TextView val = data(c, initial + "", Theme.T_DATA_S, Theme.ACCENT);
+        bar.setMax(100);
+        bar.setProgress(initial);
+        final android.widget.TextView val = data(c, initial + "%", Theme.T_DATA_S, Theme.ACCENT);
         bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
             public void onProgressChanged(android.widget.SeekBar b, int p, boolean u) {
-                int v = minVal + p;
-                val.setText(v + "");
+                val.setText(p + "%");
             }
             public void onStartTrackingTouch(android.widget.SeekBar b) {}
             public void onStopTrackingTouch(android.widget.SeekBar b) {
-                if (onChange != null) onChange.call(minVal + b.getProgress());
+                if (onChange != null) onChange.call(b.getProgress());
             }
         });
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, Theme.dp(c, 30), 1f);
@@ -317,46 +315,19 @@ public final class UI {
         return col;
     }
 
-    /** 玻璃模式三选一：关 / 浅色玻璃 / 深色玻璃 */
-    public static LinearLayout glassModeSegmented(final Context c, int current,
-                                                 final Callback<Integer> onChange) {
+    /**
+     * 边缘羽化半径 4 档
+     */
+    public static LinearLayout featherSegmented(final Context c, int current,
+                                              final UI.Callback<Integer> onChange) {
         LinearLayout col = col(c);
-        col.addView(eyebrow(c, "玻璃模式"));
+        col.addView(eyebrow(c, "边缘羽化"));
         LinearLayout row = row(c);
         row.setPadding(0, Theme.dp(c, 2), 0, Theme.dp(c, 2));
-        String[][] labels = {
-                {"关", "实色面板，不透壁纸"},
-                {"浅色", "白底+模糊带，适合亮色壁纸"},
-                {"深色", "石墨+模糊带，适合暗色壁纸"}
-        };
-        for (int i = 0; i < 3; i++) {
-            final int idx = i;
-            Button b = chip(c, labels[i][0], i == current);
-            b.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    if (onChange != null) onChange.call(idx);
-                }
-            });
-            Anim.pressable(b, 0.94f);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, UI.WC, 1f);
-            if (i > 0) lp.leftMargin = Theme.dp(c, Theme.S1);
-            row.addView(b, lp);
-        }
-        col.addView(row);
-        return col;
-    }
-
-    /** 模糊半径三档（无 / 微 / 强） */
-    public static LinearLayout glassBlurSegmented(final Context c, int current,
-                                                final Callback<Integer> onChange) {
-        LinearLayout col = col(c);
-        col.addView(eyebrow(c, "模糊带强度"));
-        LinearLayout row = row(c);
-        row.setPadding(0, Theme.dp(c, 2), 0, Theme.dp(c, 2));
-        String[] labels = {"硬边 0dp", "微 3dp", "中 6dp", "强 10dp"};
-        int[] vals = {0, 3, 6, 10};
+        String[] labels = {"硬边 0dp", "微 4dp", "默认 8dp", "强 16dp"};
+        int[] vals = {0, 4, 8, 16};
         int cur = 0;
-        for (int v : vals) if (v == current) cur = java.util.Arrays.asList(vals).indexOf(v);
+        for (int i = 0; i < vals.length; i++) if (vals[i] == current) cur = i;
         for (int i = 0; i < vals.length; i++) {
             final int idx = i;
             Button b = chip(c, labels[i], i == cur);
