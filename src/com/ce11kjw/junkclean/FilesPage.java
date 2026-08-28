@@ -413,7 +413,7 @@ public class FilesPage extends PageBase {
                                 String msg = "已处理 " + r.count + " 个副本 · "
                                         + Util.fmtSize(toTrash ? r.trashed : r.freed);
                                 act.toast(msg);
-                                if (!r.errors.isEmpty()) showErrors(r.errors);
+                                if (!r.errors.isEmpty()) offerRetry(r.errors, null);
                                 act.homePage().refreshDisk();
                                 scanDup();
                             }

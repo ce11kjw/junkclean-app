@@ -293,25 +293,32 @@ public final class Finder {
             for (File f : files) putHash(out, Util.quickHash(f), f);
             return;
         }
+        // 固定 4 个 worker 从共享游标取任务，而不是每个文件一个线程。
+        // 同尺寸文件可能上百个，一文件一线程会把设备线程数打满。
+        final java.util.concurrent.atomic.AtomicInteger cursor =
+                new java.util.concurrent.atomic.AtomicInteger();
+        final List<File> work = files;
+        int workers = Math.min(4, work.size());
         final java.util.concurrent.CountDownLatch latch =
-                new java.util.concurrent.CountDownLatch(files.size());
-        final java.util.concurrent.Semaphore gate = new java.util.concurrent.Semaphore(4);
-        for (final File f : files) {
+                new java.util.concurrent.CountDownLatch(workers);
+        for (int w = 0; w < workers; w++) {
             new Thread(new Runnable() {
                 public void run() {
                     try {
-                        gate.acquire();
-                        putHash(out, Util.quickHash(f), f);
-                    } catch (InterruptedException ignored) {
+                        int idx;
+                        while ((idx = cursor.getAndIncrement()) < work.size()) {
+                            File one = work.get(idx);
+                            try { putHash(out, Util.quickHash(one), one); }
+                            catch (Throwable ignored) {}
+                        }
                     } finally {
-                        gate.release();
                         latch.countDown();
                     }
                 }
             }).start();
         }
         try {
-            latch.await(60, java.util.concurrent.TimeUnit.SECONDS);
+            latch.await(90, java.util.concurrent.TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {}
     }
 

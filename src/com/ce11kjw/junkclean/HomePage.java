@@ -21,7 +21,7 @@ public class HomePage extends PageBase {
     private LinearLayout catBox, scanAction;
     private SegmentGauge gauge;
     private TextView rootBadge, pctText, freeText, diskText, compareText;
-    private TextView statBadge, scanState, rescanBtn, aiText;
+    private TextView statBadge, scanProgress, scanState, rescanBtn, aiText;
     private Button cleanBtn, allBtn, aiBtn;
     private List<JunkCategory> cats = new ArrayList<JunkCategory>();
     private boolean scanning;
@@ -135,6 +135,9 @@ public class HomePage extends PageBase {
         scanState.setGravity(Gravity.CENTER);
         col.addView(scanState, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
 
+        scanProgress = UI.data(act, "", Theme.T_DATA_S, Theme.ACCENT);
+        scanProgress.setGravity(Gravity.CENTER);
+        col.addView(scanProgress, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         statBadge = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
         statBadge.setGravity(Gravity.CENTER);
         col.addView(statBadge, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
@@ -231,6 +234,7 @@ public class HomePage extends PageBase {
 
     void refreshStat() {
         if (statBadge == null) return;
+        if (scanProgress != null) scanProgress.setText("");
         Store s = act.store;
         if (s.totalCount() > 0) {
             String today = Util.fmtDate(System.currentTimeMillis());
@@ -263,7 +267,9 @@ public class HomePage extends PageBase {
                         post(new Runnable() {
                             public void run() {
                                 scanState.setText("[" + i + "/" + n + "]  " + name);
-                                statBadge.setText("已发现 " + items + " 项   " + Util.fmtSize(bytes));
+                                if (scanProgress != null) {
+                                    scanProgress.setText("已发现 " + items + " 项   " + Util.fmtSize(bytes));
+                                }
                             }
                         });
                     }
@@ -275,6 +281,7 @@ public class HomePage extends PageBase {
                         scanning = false;
                         setActionLabel(cancelFlag ? "开始扫描" : "重新扫描");
                         scanState.setText(cancelFlag ? "已取消" : "");
+                        if (scanProgress != null) scanProgress.setText("");
                         renderCats();
                         updateCleanBtn();
                     }
@@ -288,7 +295,9 @@ public class HomePage extends PageBase {
         long total = 0;
         for (JunkCategory c : cats) total += c.total();
         if (total == 0) {
-            catBox.addView(buildEmptyGuide());
+            View guide = buildEmptyGuide();
+            catBox.addView(guide);
+            Anim.enter(guide, 60L);
             return;
         }
         int shown = 0;

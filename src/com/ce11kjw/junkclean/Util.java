@@ -47,13 +47,17 @@ public final class Util {
     }
 
     /** 递归目录体积（不跟随符号链接，限制深度防止栈溢出） */
+    private static final int CACHE_MAX = 512;
+
     public static long dirSize(File d) {
         if (d == null) return 0;
         if (d.isFile()) return d.length();
         String key = d.getAbsolutePath();
         long now = System.currentTimeMillis();
         long[] hit = sizeCache.get(key);
-        if (hit != null && now - hit[1] < CACHE_TTL) return hit[0];
+                if (hit != null && now - hit[1] < CACHE_TTL) return hit[0];
+        // 全盘扫描会遍历几千个目录，无上限缓存会一直占内存
+        if (sizeCache.size() >= CACHE_MAX) sizeCache.clear();
         long v = dirSize(d, 0);
         sizeCache.put(key, new long[]{v, now});
         return v;

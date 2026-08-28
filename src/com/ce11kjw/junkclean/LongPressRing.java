@@ -30,14 +30,28 @@ public class LongPressRing extends View {
 
     public void setOnComplete(Runnable r) { this.onComplete = r; }
 
-    /** 由宿主 View 的 onTouch 转发 */
+    private float downX, downY;
+
+    /**
+     * 由宿主 View 的 onTouch 转发。
+     * 手指移出阈值必须取消，否则滚动列表时手指按在条目上就会误触发加白名单。
+     */
     public void handle(MotionEvent e) {
         switch (e.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:  start(); break;
+            case MotionEvent.ACTION_DOWN:
+                downX = e.getX();
+                downY = e.getY();
+                start();
+                break;
+            case MotionEvent.ACTION_MOVE:
+                float slop = Theme.dp(getContext(), 12);
+                if (Math.abs(e.getX() - downX) > slop || Math.abs(e.getY() - downY) > slop) {
+                    cancel();
+                }
+                break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
-            case MotionEvent.ACTION_MOVE:
-                if (e.getActionMasked() != MotionEvent.ACTION_MOVE) cancel();
+                cancel();
                 break;
         }
     }
@@ -55,13 +69,17 @@ public class LongPressRing extends View {
             }
         });
         anim.addListener(new android.animation.AnimatorListenerAdapter() {
+            private boolean canceled;
+            public void onAnimationCancel(android.animation.Animator a) { canceled = true; }
             public void onAnimationEnd(android.animation.Animator a) {
-                if (progress >= 0.99f && onComplete != null) {
+                // 只有完整跑完（未被 cancel）才算长按成功
+                if (!canceled && onComplete != null) {
                     onComplete.run();
                     Anim.tick(LongPressRing.this);
                 }
-                animate().alpha(0f).setStartDelay(160).setDuration(200).start();
+                animate().alpha(0f).setStartDelay(canceled ? 0 : 160).setDuration(200).start();
                 progress = 0f;
+                invalidate();
             }
         });
         anim.start();
@@ -69,12 +87,13 @@ public class LongPressRing extends View {
 
     public void cancel() {
         if (anim != null) {
-            anim.cancel();
+            anim.cancel();   // 触发 listener 的 onAnimationCancel + onAnimationEnd
             anim = null;
+        } else {
+            progress = 0f;
+            animate().alpha(0f).setDuration(140).start();
+            invalidate();
         }
-        progress = 0f;
-        animate().alpha(0f).setDuration(140).start();
-        invalidate();
     }
 
     @Override

@@ -90,12 +90,14 @@ public class ScanEngine {
                             }
                             int n = done.incrementAndGet();
                             if (cb != null) {
+                                // items 是 synchronizedList，遍历时必须显式持锁，
+                                // 否则并发写入会抛 ConcurrentModificationException
                                 int items = 0;
                                 long bytes = 0;
-                                synchronized (pending) {
-                                    for (JunkCategory k : pending) {
+                                for (JunkCategory k : pending) {
+                                    synchronized (k.items) {
                                         items += k.items.size();
-                                        bytes += k.total();
+                                        for (JunkItem it : k.items) bytes += it.size;
                                     }
                                 }
                                 cb.onCategory(c.name, n, total, items, bytes);
@@ -109,8 +111,12 @@ public class ScanEngine {
                 }
             }).start();
         }
+        // 分段轮询而非一次性长等待：取消后立刻返回已扫到的部分，
+        // 原来要干等到 10 分钟超时才响应
         try {
-            latch.await(10, java.util.concurrent.TimeUnit.MINUTES);
+            while (!latch.await(200, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                if (cb != null && cb.cancelled()) break;
+            }
         } catch (InterruptedException ignored) {}
         cats.addAll(pending);
 

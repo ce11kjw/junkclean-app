@@ -21,11 +21,13 @@ set +e
 javac -source 8 -target 8 -bootclasspath $PLATFORM \
     -d $OUT/classes $(find src -name "*.java") 2>&1 \
     | grep -v "bootstrap class path" | tee $OUT/javac.log
+set +e
 JAVAC_FAIL=$(grep -cE "^[0-9]+ error" $OUT/javac.log)
+JAVAC_FAIL=${JAVAC_FAIL:-0}
 set -e
 if [ "$JAVAC_FAIL" != "0" ]; then
     echo "❌ 编译失败，终止构建"
-    grep -E "error:" $OUT/javac.log | head -20
+    grep -E "error:" $OUT/javac.log 2>/dev/null | head -20
     exit 1
 fi
 

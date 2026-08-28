@@ -150,16 +150,28 @@ public abstract class PageBase {
             public void run() {
                 StringBuilder batch = new StringBuilder();
                 for (String e : errors) {
-                    int i = e.indexOf('：');
+                    // 错误文案形如「原因：…/Download/x.apk」，取最后一个「：」之后
+                    int i = e.lastIndexOf('：');
                     String p = i >= 0 ? e.substring(i + 1).trim() : e.trim();
+                    // shortPath 把 sdcard 前缀替换成「…」，这里还原回绝对路径
                     if (p.startsWith("…")) p = Util.sdRoot() + p.substring(1);
-                    if (!CleanEngine.isSafe(p)) continue;
+                    if (!p.startsWith("/") || !CleanEngine.isSafe(p)) continue;
                     batch.append("rm -rf ").append(Shell.quote(p)).append('\n');
                 }
                 if (batch.length() > 0) Shell.exec(true, batch.toString());
+                // 校验实际结果，不能只说「已重试」
+                int gone = 0;
+                for (String e : errors) {
+                    int i = e.lastIndexOf('：');
+                    String p = i >= 0 ? e.substring(i + 1).trim() : e.trim();
+                    if (p.startsWith("…")) p = Util.sdRoot() + p.substring(1);
+                    if (p.startsWith("/") && !new java.io.File(p).exists()) gone++;
+                }
+                final int ok = gone;
                 post(new Runnable() {
                     public void run() {
-                        act.toast("已用 root 重试 " + errors.size() + " 项");
+                        act.toast(ok > 0 ? "root 重试成功 " + ok + " / " + errors.size() + " 项"
+                                         : "root 重试后仍未能删除");
                         ScanEngine.invalidate();
                         if (after != null) after.run();
                     }
@@ -203,10 +215,22 @@ public abstract class PageBase {
      * 分批渲染。列表可能上百项，一次 addView 会明显卡顿；
      * 首屏只建 24 行，其余分帧追加。
      */
+    /** 每次重新渲染自增，旧的分帧任务据此自行终止 */
+    private int renderToken;
+
     protected void renderBatched(final List<JunkItem> pool, final LinearLayout box,
                                  final TextView sum, final int from) {
+        if (from == 0) renderToken++;
+        renderBatched(pool, box, sum, from, renderToken);
+    }
+
+    private void renderBatched(final List<JunkItem> pool, final LinearLayout box,
+                               final TextView sum, final int from, final int token) {
+        // 列表被清空重建时 token 已变，旧任务必须停下，
+        // 否则会把上一批行追加到新列表里
+        if (token != renderToken) return;
         final int BATCH = 24;
-        int end = Math.min(from + BATCH, pool.size());
+        final int end = Math.min(from + BATCH, pool.size());
         Runnable onChange = new Runnable() {
             public void run() { updateSum(pool, sum); }
         };
@@ -217,7 +241,7 @@ public abstract class PageBase {
         if (end < pool.size()) {
             box.post(new Runnable() {
                 public void run() {
-                    if (alive()) renderBatched(pool, box, sum, end);
+                    if (alive()) renderBatched(pool, box, sum, end, token);
                 }
             });
         }

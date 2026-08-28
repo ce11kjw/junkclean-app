@@ -410,8 +410,14 @@ public final class UI {
             LinearLayout.LayoutParams rp = lp(WC, WC);
             rp.leftMargin = Theme.dp(c, Theme.S2);
             r.addView(ring, rp);
+            // 落点在勾选框上时不启动长按环，否则勾选和加白名单会互相干扰
+            final CheckBox cbRef = cb;
             r.setOnTouchListener(new View.OnTouchListener() {
                 public boolean onTouch(View v, android.view.MotionEvent e) {
+                    if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN
+                            && e.getX() <= cbRef.getRight() + Theme.dp(c, 6)) {
+                        return false;
+                    }
                     ring.handle(e);
                     return false;
                 }

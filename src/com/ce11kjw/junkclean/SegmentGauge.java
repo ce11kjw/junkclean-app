@@ -22,10 +22,10 @@ public class SegmentGauge extends View {
     private final Paint tickPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
 
+    private boolean compact = false;
     private float target = 0f;      // 目标百分比
     private float shown  = 0f;      // 当前动画值
     private float pulse  = 1f;      // 超阈值脉冲透明度
-    private boolean compact = false;
     private ValueAnimator anim, pulseAnim;
 
     public SegmentGauge(Context c) {
@@ -66,7 +66,9 @@ public class SegmentGauge extends View {
 
     private void managePulse(float p) {
         boolean need = p >= 90f && !compact;
-        if (need && pulseAnim == null) {
+        if (need) {
+            if (pulseAnim != null && pulseAnim.isRunning()) return;
+            if (pulseAnim != null) pulseAnim.cancel();
             pulseAnim = ValueAnimator.ofFloat(1f, 0.45f);
             pulseAnim.setDuration(760);
             pulseAnim.setRepeatMode(ValueAnimator.REVERSE);
@@ -89,8 +91,8 @@ public class SegmentGauge extends View {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        if (anim != null) anim.cancel();
-        if (pulseAnim != null) pulseAnim.cancel();
+        if (anim != null) { anim.cancel(); anim = null; }
+        if (pulseAnim != null) { pulseAnim.cancel(); pulseAnim = null; }
     }
 
     @Override

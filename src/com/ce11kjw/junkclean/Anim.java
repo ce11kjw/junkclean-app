@@ -10,8 +10,19 @@ public final class Anim {
 
     private Anim() {}
 
+    private static boolean alive(View v) {
+        if (v == null) return false;
+        Object act = v.getContext();
+        if (act instanceof android.app.Activity) {
+            android.app.Activity a = (android.app.Activity) act;
+            return !a.isFinishing() && !a.isDestroyed();
+        }
+        return v.isAttachedToWindow();
+    }
+
     /** 元素入场：淡入 + 上移，可指定延迟做交错 */
     public static void enter(View v, long delayMs) {
+        if (!alive(v)) return;
         v.setAlpha(0f);
         v.setTranslationY(Theme.dp(v.getContext(), 20));
         v.animate().alpha(1f).translationY(0f)
@@ -23,13 +34,18 @@ public final class Anim {
 
     /** 容器内所有直接子 View 依次入场，每个交错 stepMs */
     public static void stagger(ViewGroup group, long startDelay, long stepMs) {
+        if (group == null) return;
         for (int i = 0; i < group.getChildCount(); i++) {
-            enter(group.getChildAt(i), startDelay + i * stepMs);
+            View v = group.getChildAt(i);
+            if (v.getVisibility() == View.VISIBLE) {
+                enter(v, startDelay + i * stepMs);
+            }
         }
     }
 
     /** Tab 转场：旧页淡出下移，新页淡入上移 */
     public static void swapIn(View v) {
+        if (!alive(v)) return;
         v.setAlpha(0f);
         v.setTranslationY(Theme.dp(v.getContext(), 12));
         v.animate().alpha(1f).translationY(0f)
@@ -102,6 +118,8 @@ public final class Anim {
         a.setInterpolator(Theme.standard());
         a.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             public void onAnimationUpdate(ValueAnimator an) {
+                if (!alive(tv)) { an.cancel(); return; }
+                if (!alive(tv)) { an.cancel(); return; }
                 float t = an.getAnimatedFraction();
                 tv.setText(Util.fmtSize((long) (from + (to - from) * t)));
             }
@@ -116,6 +134,7 @@ public final class Anim {
         a.setInterpolator(Theme.standard());
         a.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             public void onAnimationUpdate(ValueAnimator an) {
+                if (!alive(tv)) { an.cancel(); return; }
                 tv.setText(String.format(java.util.Locale.US, "%.1f%%",
                         ((Float) an.getAnimatedValue()).floatValue()));
             }
@@ -130,6 +149,7 @@ public final class Anim {
         a.setInterpolator(Theme.standard());
         a.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             public void onAnimationUpdate(ValueAnimator an) {
+                if (!alive(tv)) { an.cancel(); return; }
                 tv.setText(String.valueOf(an.getAnimatedValue()) + suffix);
             }
         });
