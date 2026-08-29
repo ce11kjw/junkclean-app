@@ -535,6 +535,8 @@ public class SettingsPage extends PageBase {
         // 保护路径管理
         c.addView(UI.divider(act));
         c.addView(UI.h2(act, "保护路径（目录，扫描跳过 + 删除拦截）"));
+        c.addView(UI.note(act, "支持通配符 *，如 /Android/data/*/cache 匹配所有应用缓存目录。"),
+                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
         LinearLayout protAdd = UI.row(act);
         protInput = UI.input(act, "/sdcard/重要目录", "");
         protAdd.addView(protInput, UI.weight(1f, UI.BTN_H, act));

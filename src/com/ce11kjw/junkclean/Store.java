@@ -14,7 +14,12 @@ public class Store {
 
     public Store(Context c) {
         sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+        // 把用户保护路径同步到静态快照，供静态 isProtected() 使用
+        PROT_SNAPSHOT = protectedPaths();
     }
+
+    /** 静态快照：最近一次 Store 实例化时的用户保护路径（含自定义） */
+    private static volatile List<String> PROT_SNAPSHOT = null;
 
     // ---------- 白名单 ----------
 
@@ -46,6 +51,7 @@ public class Store {
     }
     private void saveProtected(List<String> list) {
         sp.edit().putString("protectedPaths", joinList(list)).apply();
+        PROT_SNAPSHOT = list;   // 立即刷新静态快照，改动即时生效
     }
     /** 合并后的保护列表（供扫描/删除判定） */
     public List<String> effectiveProtected() {
@@ -54,11 +60,28 @@ public class Store {
     /** 是否命中保护（静态版：直接用默认列表 + 已存自定义） */
     public static boolean isProtected(String nameOrPath) {
         if (nameOrPath == null) return false;
-        for (String p : DEFAULT_PROTECTED) {
-            if (nameOrPath.equals(p)) return true;
-            if (nameOrPath.contains("/" + p + "/") || nameOrPath.endsWith("/" + p)) return true;
+        // 优先用户快照（含自定义 + 删改），无快照则退回出厂默认
+        List<String> paths = PROT_SNAPSHOT;
+        if (paths == null || paths.isEmpty()) {
+            paths = java.util.Arrays.asList(DEFAULT_PROTECTED);
+        }
+        for (String p : paths) {
+            if (matchRule(nameOrPath, p)) return true;
         }
         return false;
+    }
+
+    /** 单条路径规则匹配，支持通配符 *（black_and_white_list 风格） */
+    static boolean matchRule(String target, String rule) {
+        if (rule == null || rule.isEmpty()) return false;
+        if (rule.contains("*")) {
+            // 通配符 → 转正则，* 匹配任意字符（含 /）
+            String rx = ".*" + java.util.regex.Pattern.quote(rule)
+                    .replace("*", "\\E.*\\Q") + ".*";
+            try { return target.matches(rx); } catch (Exception e) { return false; }
+        }
+        if (target.equals(rule)) return true;
+        return target.contains("/" + rule + "/") || target.endsWith("/" + rule);
     }
 
     /** 内置保护路径：手机上存放用户重要内容的目录。

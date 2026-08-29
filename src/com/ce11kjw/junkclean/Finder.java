@@ -36,8 +36,8 @@ public final class Finder {
         if (wl == null || wl.isEmpty() || nameOrPath == null) return false;
         for (String w : wl) {
             if (w.isEmpty()) continue;
-            if (nameOrPath.equals(w)) return true;
-            if (nameOrPath.contains("/" + w + "/") || nameOrPath.endsWith("/" + w)) return true;
+            // 支持通配符 *（如 /data/user/*/*/cache）
+            if (Store.matchRule(nameOrPath, w)) return true;
         }
         return false;
     }
