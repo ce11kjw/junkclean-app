@@ -560,6 +560,39 @@ public class SettingsPage extends PageBase {
             }
         });
         c.addView(resetProt, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        // 规则库管理（RuleEngine）
+        c.addView(UI.divider(act));
+        c.addView(UI.h2(act, "清理规则库"));
+        c.addView(UI.note(act, "规则库控制「规则清理」分类扫什么。文件位于 "
+                + Util.shortPath(RuleEngine.rulesPath()) + "，可用文件管理器编辑。"),
+                UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+        Button viewRules = UI.secondary(act, "查看规则");
+        Button resetRules = UI.secondary(act, "恢复默认规则");
+        viewRules.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                java.util.List<RuleEngine.Rule> rs = RuleEngine.load(act);
+                StringBuilder sb = new StringBuilder();
+                sb.append("共 ").append(rs.size()).append(" 条规则：\n\n");
+                for (RuleEngine.Rule r : rs) {
+                    sb.append(r.enabled ? "✓ " : "○ ").append(r.label)
+                      .append("  [").append(r.risk).append("]\n");
+                }
+                UI.info(act, "清理规则库", sb.toString());
+            }
+        });
+        resetRules.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                UI.confirm(act, "恢复默认规则",
+                        "将规则库重置为内置默认（覆盖你的自定义修改）？", new Runnable() {
+                    public void run() {
+                        if (RuleEngine.writeDefault()) act.toast("规则已重置");
+                        else act.toast("写入失败，检查存储权限");
+                    }
+                });
+            }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, viewRules, resetRules), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
         return c;
     }
 

@@ -61,6 +61,7 @@ public class ScanEngine {
                 {"emptyjunk","空文件",     "0 字节文件与空目录", "🫙", "0", "0"},
                 {"residue",  "应用残留",   "已卸载应用留下的数据目录", "🧹", "1", "0"},
                 {"syscache",  "系统缓存",  "dalvik / 字体 / 包管理器缓存（全盘模式）", "⚙", "1", "1"},
+                {"rules",    "规则清理",   "按可编辑规则库扫描（日志/广告/残留等）", "📋", "0", "0"},
         };
 
         final List<JunkCategory> pending = new ArrayList<JunkCategory>();
@@ -159,6 +160,7 @@ public class ScanEngine {
         else if ("emptyjunk".equals(c.id)) scanEmpty(c);
         else if ("residue".equals(c.id))   scanResidue(c);
         else if ("syscache".equals(c.id))  scanSysCache(c);
+        else if ("rules".equals(c.id))     scanRules(c);
     }
 
     private String scanRoot() {
@@ -261,6 +263,13 @@ public class ScanEngine {
 
     private void scanEmpty(JunkCategory c) {
         c.items.addAll(Finder.empties(scanRoot(), true, 150, whitelist, store.fullScan()));
+    }
+
+    /** 规则库扫描（RuleEngine）*/
+    private void scanRules(JunkCategory c) {
+        java.util.List<RuleEngine.Rule> rules = RuleEngine.load(ctx);
+        java.util.List<JunkItem> hits = RuleEngine.scan(scanRoot(), rules, whitelist);
+        c.items.addAll(hits);
     }
 
     private void scanResidue(JunkCategory c) {
