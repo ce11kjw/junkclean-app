@@ -15,7 +15,8 @@ import java.util.List;
 public class SettingsPage extends PageBase {
 
     private ScrollView scroll;
-    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel;
+    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel, protInput;
+    private LinearLayout protList;
     private TextView rootInfo, bgState, aiState, updState, permState, aboutRuntime;
     private LinearLayout aiBody;
 
@@ -487,14 +488,14 @@ public class SettingsPage extends PageBase {
         LinearLayout c = UI.card(act);
         c.addView(UI.note(act, "每行一个文件名、目录名或包名。所有扫描功能都会跳过。列表项长按可快捷加入。"));
         LinearLayout pRow = UI.row(act);
-        pRow.addView(UI.badge(act, "内置保护 " + Store.PROTECTED.length + " 条",
+        pRow.addView(UI.badge(act, "内置保护 " + Store.DEFAULT_PROTECTED.length + " 条",
                 Theme.ACCENT, Theme.alpha(Theme.ACCENT, 0x22)));
         Button viewP = UI.chip(act, "查看", false);
         viewP.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("以下目录始终受保护，不会被扫描或清理：\n\n");
-                for (String p : Store.PROTECTED) sb.append("· ").append(p).append('\n');
+                for (String p : Store.DEFAULT_PROTECTED) sb.append("· ").append(p).append('\n');
                 UI.info(act, "内置保护路径", sb.toString());
             }
         });
@@ -530,7 +531,74 @@ public class SettingsPage extends PageBase {
             }
         });
         c.addView(UI.btnRow(act, UI.BTN_H, save, clear), UI.lpm(act, UI.MP, UI.WC, 8));
+
+        // 保护路径管理
+        c.addView(UI.divider(act));
+        c.addView(UI.h2(act, "保护路径（目录，扫描跳过 + 删除拦截）"));
+        LinearLayout protAdd = UI.row(act);
+        protInput = UI.input(act, "/sdcard/重要目录", "");
+        protAdd.addView(protInput, UI.weight(1f, UI.BTN_H, act));
+        Button addProt = UI.primary(act, "添加");
+        addProt.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { addProtectedPath(); }
+        });
+        LinearLayout.LayoutParams app = UI.lp(Theme.dp(act, 56), Theme.dp(act, UI.BTN_H));
+        app.leftMargin = Theme.dp(act, Theme.S2);
+        protAdd.addView(addProt, app);
+        c.addView(protAdd, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+
+        protList = UI.col(act);
+        c.addView(protList, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        renderProtectedPaths();
+
+        Button resetProt = UI.secondary(act, "恢复默认保护路径");
+        resetProt.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                UI.confirm(act, "恢复默认", "将保护路径重置为出厂 66 条？", new Runnable() {
+                    public void run() { act.store.resetProtected(); renderProtectedPaths(); }
+                });
+            }
+        });
+        c.addView(resetProt, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
         return c;
+    }
+
+    private void addProtectedPath() {
+        String path = protInput.getText().toString().trim();
+        if (path.isEmpty()) { act.toast("请输入目录名或路径"); return; }
+        act.store.addProtected(path);
+        protInput.setText("");
+        renderProtectedPaths();
+        act.toast("已添加保护：" + path);
+    }
+
+    private void renderProtectedPaths() {
+        protList.removeAllViews();
+        List<String> list = act.store.protectedPaths();
+        if (list.isEmpty()) {
+            protList.addView(UI.note(act, "暂无保护路径"));
+            return;
+        }
+        for (int i = 0; i < list.size(); i++) {
+            final int idx = i;
+            LinearLayout row = UI.row(act);
+            row.setPadding(0, Theme.dp(act, 3), 0, Theme.dp(act, 3));
+            TextView nm = UI.data(act, list.get(i), Theme.T_DATA_S, Theme.MUTED);
+            nm.setSingleLine(true);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            row.addView(nm, new LinearLayout.LayoutParams(0, UI.WC, 1f));
+            Button del = UI.danger(act, "×");
+            del.setTextSize(13);
+            LinearLayout.LayoutParams dp = UI.lp(Theme.dp(act, 32), Theme.dp(act, 26));
+            del.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    act.store.removeProtected(idx);
+                    renderProtectedPaths();
+                }
+            });
+            row.addView(del, dp);
+            protList.addView(row);
+        }
     }
 
     // ---------- 远程更新 ----------
@@ -813,7 +881,7 @@ public class SettingsPage extends PageBase {
 
         c.addView(UI.h2(act, "安全设计"), UI.lpm(act, UI.MP, UI.WC, 12));
         c.addView(UI.note(act,
-                "· 内置 " + Store.PROTECTED.length + " 条保护路径，覆盖相册、聊天记录、备份、密钥等\n"
+                "· 内置 " + Store.DEFAULT_PROTECTED.length + " 条保护路径，覆盖相册、聊天记录、备份、密钥等\n"
               + "· 路径白名单机制，拒绝 .. 遍历与系统根目录操作\n"
               + "· 只删除已勾选项，删除前二次确认\n"
               + "· 谨慎分类默认不勾选"), UI.lpm(act, UI.MP, UI.WC, 4));

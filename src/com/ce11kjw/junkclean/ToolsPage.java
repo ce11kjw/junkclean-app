@@ -116,8 +116,44 @@ public class ToolsPage extends PageBase {
         clean.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { cleanApps(); }
         });
-        c.addView(UI.btnRow(act, UI.BTN_H, clean), UI.lpm(act, UI.MP, UI.WC, 10));
+        // 无 root 自动清理（无障碍，Apex 思路）
+        Button autoClean = UI.secondary(act, "自动清理（无root）");
+        autoClean.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { autoCleanApps(); }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, clean, autoClean), UI.lpm(act, UI.MP, UI.WC, 10));
         return c;
+    }
+
+    /** 无 root：借无障碍服务逐个打开应用信息页自动点「清除缓存」 */
+    private void autoCleanApps() {
+        final List<String> pkgs = new ArrayList<String>();
+        for (Finder.AppCache a : appItems) if (a.checked) pkgs.add(a.pkg);
+        if (pkgs.isEmpty()) { act.toast("未选中应用"); return; }
+
+        if (!CacheAccessibilityService.isEnabled()) {
+            UI.confirm(act, "需要无障碍权限",
+                    "无 root 自动清缓存需要开启无障碍服务。\n\n"
+                    + "开启后 JunkClean 会自动打开每个应用的信息页并点击「清除缓存」，"
+                    + "过程中屏幕会快速跳转，请勿操作。\n\n现在去开启？",
+                    new Runnable() {
+                public void run() {
+                    try {
+                        act.startActivity(new android.content.Intent(
+                                android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                    } catch (Exception e) { act.toast("无法打开无障碍设置"); }
+                }
+            });
+            return;
+        }
+        UI.confirm(act, "自动清理",
+                "将自动清理 " + pkgs.size() + " 个应用缓存。\n过程中屏幕会自动跳转，请勿操作手机。",
+                new Runnable() {
+            public void run() {
+                CacheAccessibilityService.startBatch(act, pkgs);
+                act.toast("开始自动清理，请勿操作屏幕…");
+            }
+        });
     }
 
     private void scanApps() {

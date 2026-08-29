@@ -55,13 +55,9 @@ public final class Browser {
         return out;
     }
 
-    /** 命中内置保护路径的条目，UI 上标记并阻止删除 */
+    /** 命中保护路径的条目，UI 上标记并阻止删除 */
     public static boolean isProtected(String name, String path) {
-        for (String p : Store.PROTECTED) {
-            if (name.equals(p)) return true;
-            if (p.contains("/") && path.contains("/" + p)) return true;
-        }
-        return false;
+        return Store.isProtected(name) || Store.isProtected(path);
     }
 
     /** 上一级目录，已在根则返回 null */

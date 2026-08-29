@@ -19,10 +19,53 @@ public class Store {
     // ---------- 白名单 ----------
 
     /**
-     * 内置保护路径：手机上存放用户重要内容的目录。
+     * 保护路径：手机上存放用户重要内容的目录，扫描跳过 + 删除拦截。
+     * 首次装填 DEFAULT_PROTECTED，之后完全由用户管理（可增删改）。
+     */
+    public List<String> protectedPaths() {
+        List<String> list = split(sp.getString("protectedPaths", ""));
+        if (list.isEmpty() && !sp.contains("protectedPaths")) {
+            // 首次：填默认 66 条
+            for (String p : DEFAULT_PROTECTED) list.add(p);
+            sp.edit().putString("protectedPaths", joinList(list)).apply();
+        }
+        return list;
+    }
+    public void addProtected(String path) {
+        List<String> list = protectedPaths();
+        if (!list.contains(path)) { list.add(path); saveProtected(list); }
+    }
+    public void removeProtected(int idx) {
+        List<String> list = protectedPaths();
+        if (idx >= 0 && idx < list.size()) { list.remove(idx); saveProtected(list); }
+    }
+    public void resetProtected() {
+        List<String> list = new ArrayList<String>();
+        for (String p : DEFAULT_PROTECTED) list.add(p);
+        saveProtected(list);
+    }
+    private void saveProtected(List<String> list) {
+        sp.edit().putString("protectedPaths", joinList(list)).apply();
+    }
+    /** 合并后的保护列表（供扫描/删除判定） */
+    public List<String> effectiveProtected() {
+        return protectedPaths();
+    }
+    /** 是否命中保护（静态版：直接用默认列表 + 已存自定义） */
+    public static boolean isProtected(String nameOrPath) {
+        if (nameOrPath == null) return false;
+        for (String p : DEFAULT_PROTECTED) {
+            if (nameOrPath.equals(p)) return true;
+            if (nameOrPath.contains("/" + p + "/") || nameOrPath.endsWith("/" + p)) return true;
+        }
+        return false;
+    }
+
+    /** 内置保护路径：手机上存放用户重要内容的目录。
      * 这些始终生效，不可通过清空白名单移除，避免误删照片、聊天记录、备份等。
      */
-    public static final String[] PROTECTED = {
+    /** 出厂默认保护路径（首次填充，用户可增删） */
+    public static final String[] DEFAULT_PROTECTED = {
             // 相册与影像
             "DCIM", "Camera", "Pictures", "Screenshots", "ScreenRecorder", "MIUI/Gallery",
             // 影音与文档
@@ -63,13 +106,7 @@ public class Store {
         return removedProt().contains(name);
     }
 
-    /** PROTECTED 减去被用户移除的 */
-    public java.util.List<String> effectiveProtected() {
-        java.util.List<String> r = new ArrayList<String>();
-        java.util.List<String> removed = removedProt();
-        for (String p : PROTECTED) if (!removed.contains(p)) r.add(p);
-        return r;
-    }
+
 
     private String joinForSet(List<String> list) {
         StringBuilder b = new StringBuilder();
@@ -83,7 +120,8 @@ public class Store {
     /** 用户白名单 + 内置保护（减去被用户移除的） */
     public List<String> whitelist() {
         List<String> out = split(sp.getString("whitelist", ""));
-        for (String p : effectiveProtected()) if (!out.contains(p)) out.add(p);
+        // 保护路径也纳入白名单（扫描跳过）
+        for (String p : protectedPaths()) if (!out.contains(p)) out.add(p);
         return out;
     }
 
@@ -189,6 +227,15 @@ public class Store {
         return sp.getString("orgSrc", Util.sdRoot() + "/下载");
     }
     public void setOrgSrc(String v) { sp.edit().putString("orgSrc", v).apply(); }
+
+    // ---------- 相似拒绝（Cleanify 思路） ----------
+    /** 用户/AI 标记为「不是相似」的组，永久排除 */
+    public List<String> dupDeny() { return split(sp.getString("dupDeny", "")); }
+    public void addDupDeny(String groupKey) {
+        List<String> list = dupDeny();
+        if (!list.contains(groupKey)) { list.add(groupKey); sp.edit().putString("dupDeny", joinList(list)).apply(); }
+    }
+    public void clearDupDeny() { sp.edit().remove("dupDeny").apply(); }
 
     // ---------- 文件清理：保存待清理目录 ----------
     /** 每行：路径|1(删整个目录)/0(只删内容) */

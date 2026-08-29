@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">JunkClean</string>
+    <string name="a11y_desc">开启后 JunkClean 可自动打开各应用信息页并点击清除缓存，实现无 root 批量清理。仅在你手动触发时工作，不读取任何个人信息。</string>
 </resources>

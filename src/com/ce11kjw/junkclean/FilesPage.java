@@ -52,9 +52,10 @@ public class FilesPage extends PageBase {
 
     // 文件清理（目录浏览）
     private android.widget.EditText brPath;
-    private LinearLayout savedDirList;
-    private String brCur;
+    private LinearLayout savedDirList, brList;
+    private TextView brSum;
     private List<Browser.Entry> brItems = new ArrayList<Browser.Entry>();
+    private String brCur = Util.sdRoot();
 
     public FilesPage(MainActivity a) {
         super(a);
@@ -359,6 +360,10 @@ public class FilesPage extends PageBase {
                     if (!dup) {
                         dupGroups.remove(g);   // AI 说不是重复，剔除
                         removed[0]++;
+                        // 相似拒绝：记住这组，下次扫描不再列出
+                        if (!g.files.isEmpty()) {
+                            act.store.addDupDeny(g.files.get(0).path);
+                        }
                     }
                 }
                 post(new Runnable() {
@@ -409,8 +414,10 @@ public class FilesPage extends PageBase {
         new Thread(new Runnable() {
             public void run() {
                 final int vThresh = act.store.visualThreshold();
+                final java.util.Set<String> deny =
+                        new java.util.HashSet<String>(act.store.dupDeny());
                 final List<Finder.DupGroup> gs = Finder.duplicates(
-                        scanRoot(), 65536, 40, wl(), vThresh);
+                        scanRoot(), 65536, 40, wl(), vThresh, deny);
                 
                 // AI 智能策略：用视觉模型挑最优
                 if ("ai_smart".equals(keepPolicy) && act.store.aiReady() && !gs.isEmpty()) {
@@ -655,124 +662,199 @@ public class FilesPage extends PageBase {
     private View browseCard() {
         LinearLayout c = UI.card(act);
         c.addView(UI.eyebrow(act, "文件清理"));
-        c.addView(UI.title(act, "目录定时清理"), UI.lpm(act, UI.MP, UI.WC, 2));
-        c.addView(UI.note(act, "填入目录路径，保存到定时清理列表。到点自动清理，无需手动操作。"),
-                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        c.addView(UI.title(act, "目录浏览与清理"), UI.lpm(act, UI.MP, UI.WC, 2));
 
-        // 路径输入框 + 保存按钮
+        // 单一路径输入框
         LinearLayout pathRow = UI.row(act);
-        brPath = UI.input(act, Util.sdRoot() + "/.junkclean_trash", "");
-        brPath.setTypeface(Theme.data());
-        brPath.setTextSize(Theme.T_DATA_S);
+        brPath = UI.input(act, Util.sdRoot() + "/Download", "");
         pathRow.addView(brPath, UI.weight(1f, UI.BTN_H, act));
-        Button saveBtn = UI.primary(act, "保存");
-        saveBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { saveCleanDir(); }
+        Button viewBtn = UI.primary(act, "查看目录");
+        viewBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { goToPath(); }
         });
-        LinearLayout.LayoutParams vp = UI.lp(Theme.dp(act, 64), Theme.dp(act, UI.BTN_H));
+        LinearLayout.LayoutParams vp = UI.lp(Theme.dp(act, 72), Theme.dp(act, UI.BTN_H));
         vp.leftMargin = Theme.dp(act, Theme.S2);
-        pathRow.addView(saveBtn, vp);
+        pathRow.addView(viewBtn, vp);
         c.addView(pathRow, UI.lpm(act, UI.MP, UI.WC, Theme.S3));
 
-        // 尾斜杠规则说明
-        c.addView(UI.note(act, "路径规则：/sdcard/.jx/ 带尾斜杠 → 只删文件保留目录\n"
-                + "         /sdcard/.jx  不带尾斜杠 → 删整个目录（含目录本身）"),
-                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        // 目录内容（勾选文件）
+        brSum = UI.data(act, "", Theme.T_DATA_S, Theme.DIM);
+        c.addView(brSum, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        brList = UI.col(act);
+        c.addView(brList, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
 
-        // 已保存列表
-        c.addView(UI.eyebrow(act, "待清理"), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+        // 操作按钮
+        Button selAll = UI.secondary(act, "全选");
+        Button clean = UI.danger(act, "立即清理选中");
+        Button save = UI.secondary(act, "保存到定时");
+        selAll.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                for (Browser.Entry e : brItems) e.checked = !e.protectedPath;
+                // 勾选框通过 tag 关联，重绘一次保持同步
+                for (int i = 0; i < brList.getChildCount(); i++) {
+                    View row = brList.getChildAt(i);
+                    if (!(row instanceof LinearLayout)) continue;
+                    View f = ((LinearLayout) row).getChildAt(0);
+                    if (f instanceof CheckBox && f.getTag() instanceof Browser.Entry) {
+                        ((CheckBox) f).setChecked(((Browser.Entry) f.getTag()).checked);
+                    }
+                }
+                updateBrowseSum();
+            }
+        });
+        clean.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { cleanCheckedFiles(); }
+        });
+        save.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { saveCurrentDir(); }
+        });
+        c.addView(UI.btnRow(act, UI.BTN_H, selAll, clean, save), UI.lpm(act, UI.MP, UI.WC, Theme.S3));
+
+        // 已保存定时列表
+        c.addView(UI.eyebrow(act, "定时清理（已保存）"), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
         savedDirList = UI.col(act);
         c.addView(savedDirList, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
         renderSavedCleanDirs();
 
+        Button runSchedule = UI.primary(act, "执行定时清理");
         Button clearAll = UI.secondary(act, "清空列表");
+        runSchedule.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { runSavedDirsNow(); }
+        });
         clearAll.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { act.store.clearCleanDirs(); renderSavedCleanDirs(); }
         });
-        Button runNow = UI.primary(act, "立即清理");
-        runNow.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { runSavedDirsNow(); }
-        });
-        c.addView(UI.btnRow(act, UI.BTN_H, clearAll, runNow), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+        c.addView(UI.btnRow(act, UI.BTN_H, runSchedule, clearAll), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
+
+        goToPath();
         return c;
     }
 
-    /** 立即执行已保存目录的清理（不等待定时） */
-    private void runSavedDirsNow() {
-        final List<String> dirs = act.store.savedCleanDirs();
-        if (dirs.isEmpty()) { act.toast("没有已保存的目录"); return; }
-        act.toast("开始清理 " + dirs.size() + " 个目录…");
+    private void goToPath() {
+        String path = brPath.getText().toString().trim();
+        if (path.isEmpty()) { path = Util.sdRoot(); }
+        java.io.File f = new java.io.File(path);
+        if (!f.isAbsolute()) f = new java.io.File(Util.sdRoot(), path);
+        if (!f.isDirectory()) { act.toast("目录不存在"); return; }
+        brPath.setText(f.getAbsolutePath());
+        loadBrowseDir(f.getAbsolutePath());
+    }
+
+    private void loadBrowseDir(String path) {
+        brCur = path;
+        brItems.clear();
+        brList.removeAllViews();
+        brSum.setText("读取中…");
         new Thread(new Runnable() {
             public void run() {
-                long freed = 0;
-                int cnt = 0;
-                CleanEngine eng = new CleanEngine(false);
-                for (String line : dirs) {
-                    String[] parts = line.split("\\|", 2);
-                    String path = parts.length > 0 ? parts[0] : "";
-                    if (path.isEmpty()) continue;
-                    java.io.File dir = new java.io.File(path);
-                    if (!dir.exists()) continue;
-                    boolean delItself = parts.length > 1 && "1".equals(parts[1]);
-                    if (delItself) {
-                        // 删整个目录
-                        java.util.List<JunkItem> one = java.util.Collections.singletonList(
-                                new JunkItem(path, dir.getName(), 0));
-                        CleanEngine.Result r = eng.cleanItems(one);
-                        freed += r.freed;
-                        cnt += r.count;
-                        // 清掉已删除的条目
-                        act.store.removeCleanDir(dirs.indexOf(line));
-                    } else {
-                        // 只删内部文件
-                        java.io.File[] kids = dir.listFiles();
-                        if (kids != null) {
-                            java.util.List<JunkItem> items = new java.util.ArrayList<JunkItem>();
-                            for (java.io.File k : kids)
-                                items.add(new JunkItem(k.getAbsolutePath(), k.getName(), 0));
-                            CleanEngine.Result r = eng.cleanItems(items);
-                            freed += r.freed;
-                            cnt += r.count;
-                        }
-                    }
-                }
-                final long f = freed;
-                final int n = cnt;
+                final java.util.List<Browser.Entry> list = Browser.list(path, false);
                 post(new Runnable() {
                     public void run() {
-                        renderSavedCleanDirs();
-                        act.store.addStat(f, n);
-                        ScanEngine.invalidate();
-                        act.toast("清理完成 · " + n + " 项 · " + Util.fmtSize(f));
-                        act.homePage().refreshDisk();
+                        brItems = list;
+                        renderBrowseDir();
                     }
                 });
             }
         }).start();
     }
 
-    private void saveCleanDir() {
-        String path = brPath.getText().toString().trim();
-        if (path.isEmpty()) { act.toast("请输入路径"); return; }
-        // 尾斜杠规则
-        boolean delItself = !path.endsWith("/") && !path.endsWith("/ ");
-        String cleanPath = path.replaceAll("/+$", "");
-        java.io.File f = new java.io.File(cleanPath);
-        if (!f.isAbsolute()) f = new java.io.File(Util.sdRoot(), cleanPath);
-        if (!f.exists() || !f.isDirectory()) {
-            act.toast("目录不存在：" + f.getAbsolutePath());
+    private void renderBrowseDir() {
+        brList.removeAllViews();
+        if (brItems.isEmpty()) {
+            brSum.setText("目录为空");
+            brList.addView(UI.empty(act, "空目录"));
             return;
         }
-        act.store.saveCleanDir(f.getAbsolutePath(), delItself);
-        act.toast("已保存，下次定时清理时执行");
+        long total = 0;
+        for (Browser.Entry e : brItems) total += e.size;
+        brSum.setText(brItems.size() + " 项 · " + Util.fmtSize(total)
+                + "（点击文件夹进入，勾选后点立即清理）");
+        int shown = 0;
+        for (final Browser.Entry e : brItems) {
+            if (shown++ > 120) { brList.addView(UI.note(act, "… 还有 " + (brItems.size() - 120) + " 项")); break; }
+            LinearLayout r = UI.row(act);
+            r.setPadding(0, Theme.dp(act, 5), 0, Theme.dp(act, 5));
+            final CheckBox cb = UI.check(act, false);
+            cb.setTag(e);
+            cb.setEnabled(!e.protectedPath);
+            cb.setAlpha(e.protectedPath ? 0.3f : 1f);
+            cb.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+                public void onCheckedChanged(android.widget.CompoundButton v, boolean on) { e.checked = on; updateBrowseSum(); }
+            });
+            r.addView(cb);
+            TextView nm = UI.text(act, (e.dir ? "📁 " : "📄 ") + e.name, Theme.T_BODY_S, e.protectedPath ? Theme.DIM : Theme.MUTED);
+            nm.setSingleLine(true);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            r.addView(nm, UI.weight(1f, UI.WC, act));
+            r.addView(UI.data(act, e.dir ? "" : Util.fmtSize(e.size), Theme.T_DATA_S, Theme.DIM));
+            if (e.dir) {
+                nm.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) { loadBrowseDir(e.path); brPath.setText(e.path); }
+                });
+            }
+            brList.addView(r);
+        }
+    }
+
+    private void updateBrowseSum() {
+        int n = 0; long sz = 0;
+        for (Browser.Entry e : brItems) if (e.checked) { n++; sz += e.size; }
+        if (n == 0) { brSum.setText(brItems.size() + " 项"); return; }
+        brSum.setText("已选 " + n + " / " + brItems.size() + " 项 · " + Util.fmtSize(sz));
+    }
+
+    private void cleanCheckedFiles() {
+        final java.util.List<JunkItem> sel = new java.util.ArrayList<JunkItem>();
+        for (Browser.Entry e : brItems) {
+            if (!e.checked || e.protectedPath) continue;
+            sel.add(new JunkItem(e.path, e.name, e.size));
+        }
+        if (sel.isEmpty()) { act.toast("未选中项目"); return; }
+        UI.confirm(act, "立即清理",
+                "将删除 " + sel.size() + " 项 · " + Util.fmtSize(sizeOf(sel)),
+                new Runnable() {
+            public void run() {
+                new Thread(new Runnable() {
+                    public void run() {
+                        CleanEngine.Result r = new CleanEngine(false).cleanItems(sel);
+                        post(new Runnable() {
+                            public void run() {
+                                act.store.addStat(r.freed, r.count);
+                                act.toast("已清理 " + r.count + " 项 · " + Util.fmtSize(r.freed));
+                                if (!r.errors.isEmpty()) offerRetry(r.errors, null);
+                                loadBrowseDir(brCur);
+                                act.homePage().refreshDisk();
+                            }
+                        });
+                    }
+                }).start();
+            }
+        });
+    }
+
+    private boolean checkable(Browser.Entry e) { return e != null && !e.protectedPath; }
+
+    private long sizeOf(java.util.List<JunkItem> items) {
+        long s = 0; for (JunkItem it : items) s += it.size; return s;
+    }
+
+    private void saveCurrentDir() {
+        String path = brPath.getText().toString().trim();
+        if (path.isEmpty()) { act.toast("请先查看一个目录"); return; }
+        java.io.File f = new java.io.File(path);
+        if (!f.isDirectory()) { act.toast("目录不存在"); return; }
+        // 尾斜杠规则
+        boolean del = !path.endsWith("/") && !path.endsWith("/ ");
+        act.store.saveCleanDir(f.getAbsolutePath(), del);
         renderSavedCleanDirs();
+        act.toast("已保存到定时清理列表");
     }
 
     private void renderSavedCleanDirs() {
         savedDirList.removeAllViews();
         List<String> dirs = act.store.savedCleanDirs();
         if (dirs.isEmpty()) {
-            savedDirList.addView(UI.note(act, "暂无保存的目录，填入路径后点保存"));
+            savedDirList.addView(UI.note(act, "暂无保存的目录，查看后点「保存到定时」"));
             return;
         }
         for (int i = 0; i < dirs.size(); i++) {
@@ -797,4 +879,54 @@ public class FilesPage extends PageBase {
             savedDirList.addView(row);
         }
     }
+
+    /** 立即执行已保存目录清理 */
+    private void runSavedDirsNow() {
+        final List<String> dirs = act.store.savedCleanDirs();
+        if (dirs.isEmpty()) { act.toast("没有已保存的目录"); return; }
+        act.toast("开始清理 " + dirs.size() + " 个目录…");
+        new Thread(new Runnable() {
+            public void run() {
+                long freed = 0; int cnt = 0;
+                CleanEngine eng = new CleanEngine(false);
+                for (int i = 0; i < dirs.size(); i++) {
+                    String line = dirs.get(i);
+                    String[] parts = line.split("\\|", 2);
+                    String path = parts.length > 0 ? parts[0] : "";
+                    if (path.isEmpty()) continue;
+                    java.io.File dir = new java.io.File(path);
+                    if (!dir.exists()) continue;
+                    boolean delItself = parts.length > 1 && "1".equals(parts[1]);
+                    if (delItself) {
+                        CleanEngine.Result r = eng.cleanItems(java.util.Collections.singletonList(
+                                new JunkItem(path, dir.getName(), 0)));
+                        freed += r.freed; cnt += r.count;
+                        act.store.removeCleanDir(i);
+                    } else {
+                        java.io.File[] kids = dir.listFiles();
+                        if (kids != null) {
+                            java.util.List<JunkItem> items = new java.util.ArrayList<JunkItem>();
+                            for (java.io.File k : kids)
+                                items.add(new JunkItem(k.getAbsolutePath(), k.getName(), 0));
+                            CleanEngine.Result r = eng.cleanItems(items);
+                            freed += r.freed; cnt += r.count;
+                        }
+                    }
+                }
+                final long f = freed; final int n = cnt;
+                post(new Runnable() {
+                    public void run() {
+                        renderSavedCleanDirs();
+                        act.store.addStat(f, n);
+                        ScanEngine.invalidate();
+                        act.toast("清理完成 · " + n + " 项 · " + Util.fmtSize(f));
+                        act.homePage().refreshDisk();
+                    }
+                });
+            }
+        }).start();
+    }
+
 }
+
+

@@ -292,17 +292,31 @@ public final class Finder {
      */
     public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
                                             List<String> wl, int hashThreshold) {
-        return duplicates(root, minSize, maxGroups, wl, hashThreshold, null);
+        return duplicates(root, minSize, maxGroups, wl, hashThreshold, (HashCache) null, null);
     }
 
     /** 带增量缓存版本：cache 复用上次哈希，二次扫描快 */
     public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
                                             List<String> wl, int hashThreshold,
                                             HashCache cache) {
+        return duplicates(root, minSize, maxGroups, wl, hashThreshold, cache, null);
+    }
+
+    /** 带 deny 相似拒绝版本 */
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl, int hashThreshold,
+                                            java.util.Set<String> deny) {
+        return duplicates(root, minSize, maxGroups, wl, hashThreshold, null, deny);
+    }
+
+    /** 完整版：缓存 + 相似拒绝 */
+    public static List<DupGroup> duplicates(String root, long minSize, int maxGroups,
+                                            List<String> wl, int hashThreshold,
+                                            HashCache cache, java.util.Set<String> deny) {
         List<DupGroup> groups = new ArrayList<DupGroup>();
         groups.addAll(duplicates(root, minSize, maxGroups, wl, false, cache));
         if (hashThreshold > 0 && groups.size() < maxGroups) {
-            groups.addAll(visualDuplicates(root, wl, hashThreshold));
+            groups.addAll(visualDuplicates(root, wl, hashThreshold, deny));
         }
         return groups;
     }
@@ -600,6 +614,11 @@ public final class Finder {
     /** 仅扫描图片和视频 */
     public static List<DupGroup> visualDuplicates(String root, List<String> wl,
                                                 final int threshold) {
+        return visualDuplicates(root, wl, threshold, null);
+    }
+
+    public static List<DupGroup> visualDuplicates(String root, List<String> wl,
+                                                final int threshold, final java.util.Set<String> deny) {
         final List<File> media = new ArrayList<File>();
         collectMedia(new File(root), 0, media, wl);
         if (media.size() < 2) return new ArrayList<DupGroup>();
@@ -647,6 +666,12 @@ public final class Finder {
                 if (PerceptualHash.distance(hi, hj) <= threshold) {
                     List<File> bucket = new ArrayList<File>(byHash.get(hi));
                     bucket.addAll(byHash.get(hj));
+                    // 相似拒绝：该组被标记过则跳过
+                    if (deny != null) {
+                        boolean denied = false;
+                        for (File f : bucket) if (deny.contains(f.getAbsolutePath())) { denied = true; break; }
+                        if (denied) continue;
+                    }
                     DupGroup dg = new DupGroup();
                     dg.size = bucket.get(0).length();
                     dg.name = bucket.get(0).getName();
