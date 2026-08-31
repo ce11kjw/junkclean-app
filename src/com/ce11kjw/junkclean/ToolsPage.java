@@ -1089,7 +1089,9 @@ public class ToolsPage extends PageBase {
             }
         }), UI.lpm(act, UI.MP, UI.WC, Theme.S2));
 
-        Button aiBtn = UI.secondary(act, "🤖  AI 确认相似组");
+        Button aiBtn = UI.secondary(act, "AI 确认相似组");
+        aiBtn.setCompoundDrawablesWithIntrinsicBounds(
+                IconView.drawable(act, "ic_bot"), null, null, null);
         aiBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { aiVerifyDups(); }
         });
