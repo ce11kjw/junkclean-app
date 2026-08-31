@@ -357,8 +357,14 @@ public class HomePage extends PageBase {
         final LinearLayout card = UI.card(act);
 
         LinearLayout head = UI.row(act);
-        TextView icon = UI.text(act, c.icon, 18, Theme.TEXT);
-        head.addView(icon);
+        // Lucide 图标（回退：无 drawable 时显示文本）
+        android.widget.ImageView iconIv = IconView.of(act, c.icon, 18, Theme.TEXT);
+        if (iconIv.getDrawable() != null) {
+            head.addView(iconIv);
+        } else {
+            TextView icon = UI.text(act, c.icon, 18, Theme.TEXT);
+            head.addView(icon);
+        }
 
         LinearLayout info = UI.col(act);
         LinearLayout nameRow = UI.row(act);

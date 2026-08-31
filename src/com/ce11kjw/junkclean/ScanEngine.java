@@ -52,16 +52,16 @@ public class ScanEngine {
 
         List<JunkCategory> cats = new ArrayList<JunkCategory>();
         String[][] defs = {
-                {"cache",    "应用缓存",   root ? "所有应用的 cache / code_cache" : "可访问的外部缓存", "📦", "0", "0"},
-                {"webview",  "WebView 缓存", "内置浏览器内核缓存", "🌐", "0", "0"},
-                {"log",      "日志文件",   "tombstone / anr / dropbox", "📄", "0", "1"},
-                {"temp",     "临时文件",   ".tmp / .part / .crdownload 等", "🗂", "0", "0"},
-                {"thumb",    "缩略图缓存", "相册与图库预览缓存", "🖼", "0", "0"},
-                {"apkjunk",  "冗余安装包", "已安装应用对应的 apk 文件", "📥", "1", "0"},
-                {"emptyjunk","空文件",     "0 字节文件与空目录", "🫙", "0", "0"},
-                {"residue",  "应用残留",   "已卸载应用留下的数据目录", "🧹", "1", "0"},
-                {"syscache",  "系统缓存",  "dalvik / 字体 / 包管理器缓存（全盘模式）", "⚙", "1", "1"},
-                {"rules",    "规则清理",   "按可编辑规则库扫描（日志/广告/残留等）", "📋", "0", "0"},
+                {"cache",    "应用缓存",   root ? "所有应用的 cache / code_cache" : "可访问的外部缓存", "ic_cache", "0", "0"},
+                {"webview",  "WebView 缓存", "内置浏览器内核缓存", "ic_webview", "0", "0"},
+                {"log",      "日志文件",   "tombstone / anr / dropbox", "ic_log", "0", "1"},
+                {"temp",     "临时文件",   ".tmp / .part / .crdownload 等", "ic_temp", "0", "0"},
+                {"thumb",    "缩略图缓存", "相册与图库预览缓存", "ic_thumb", "0", "0"},
+                {"apkjunk",  "冗余安装包", "已安装应用对应的 apk 文件", "ic_apkjunk", "1", "0"},
+                {"emptyjunk","空文件",     "0 字节文件与空目录", "ic_empty", "0", "0"},
+                {"residue",  "应用残留",   "已卸载应用留下的数据目录", "ic_residue", "1", "0"},
+                {"syscache",  "系统缓存",  "dalvik / 字体 / 包管理器缓存（全盘模式）", "ic_syscache", "1", "1"},
+                {"rules",    "规则清理",   "按可编辑规则库扫描（日志/广告/残留等）", "ic_rules", "0", "0"},
         };
 
         final List<JunkCategory> pending = new ArrayList<JunkCategory>();
