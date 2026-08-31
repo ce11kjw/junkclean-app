@@ -8,6 +8,7 @@ public class JunkCategory {
     public String id;
     public String name;
     public String desc;
+    /** Lucide drawable 名（如 ic_cache），或回退 emoji 文本 */
     public String icon;
     public boolean careful;      // 谨慎项，默认不勾
     public boolean needRoot;     // 需要 root 才能扫
