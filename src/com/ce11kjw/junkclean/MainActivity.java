@@ -19,7 +19,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "3.0.29";
+    public static final String VERSION = "3.0.30";
 
     private FrameLayout content;
     private static final int TAB_N = 5;
@@ -117,7 +117,8 @@ public class MainActivity extends Activity {
         toast("外观已更新");
     }
 
-    private static final String[] TAB_ICON = {"◉", "◈", "▤", "▦", "⚙"};
+    // Lucide drawable 名（Home/工具/文件/统计/设置）
+    private static final String[] TAB_ICON = {"ic_home", "ic_tools", "ic_files", "ic_stats", "ic_settings"};
     private static final String[] TAB_NAME = {"首页", "工具", "文件", "统计", "设置"};
 
     /** 浮空玻璃药丸导航：脱离底边，激活项有药丸背景与文字标签 */
@@ -138,8 +139,7 @@ public class MainActivity extends Activity {
             int tp = Theme.dp(this, Theme.S2);
             tab.setPadding(tp, Theme.dp(this, 7), tp, Theme.dp(this, 6));
 
-            TextView icon = UI.text(this, TAB_ICON[i], 15, Theme.DIM);
-            icon.setGravity(android.view.Gravity.CENTER);
+            android.widget.ImageView icon = IconView.of(this, TAB_ICON[i], 15, Theme.DIM);
             tab.addView(icon);
 
             TextView label = UI.text(this, TAB_NAME[i], Theme.T_MICRO, Theme.DIM);
@@ -171,6 +171,10 @@ public class MainActivity extends Activity {
         for (int k = 0; k < tab.getChildCount(); k++) {
             View v = tab.getChildAt(k);
             if (v instanceof TextView) ((TextView) v).setTextColor(color);
+            else if (v instanceof android.widget.ImageView
+                    && ((android.widget.ImageView) v).getDrawable() != null) {
+                ((android.widget.ImageView) v).getDrawable().setTint(color);
+            }
         }
         View icon = tab.getChildAt(0);
         icon.animate().translationY(active ? -Theme.dp(this, 1) : 0)
