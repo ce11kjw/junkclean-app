@@ -599,33 +599,7 @@ public class SettingsPage extends PageBase {
         scroll.setVerticalScrollBarEnabled(false);
         final LinearLayout listBox = UI.col(act);
         scroll.addView(listBox, new android.widget.LinearLayout.LayoutParams(UI.MP, UI.WC));
-
-        // 渲染列表内容
-        java.util.List<String> list = act.store.protectedPaths();
-        if (list.isEmpty()) {
-            listBox.addView(UI.note(act, "暂无保护路径"));
-        } else {
-            for (int i = 0; i < list.size(); i++) {
-                final int idx = i;
-                LinearLayout row = UI.row(act);
-                row.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
-                TextView nm = UI.data(act, list.get(i), Theme.T_DATA_S, Theme.MUTED);
-                nm.setSingleLine(true);
-                nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
-                row.addView(nm, new android.widget.LinearLayout.LayoutParams(0, UI.WC, 1f));
-                Button del = UI.danger(act, "×");
-                del.setTextSize(13);
-                LinearLayout.LayoutParams dp = UI.lp(Theme.dp(act, 32), Theme.dp(act, 26));
-                del.setOnClickListener(new View.OnClickListener() {
-                    public void onClick(View v) {
-                        act.store.removeProtected(idx);
-                        act.toast("已移除保护：" + act.store.protectedPaths().size() + " 条剩余");
-                    }
-                });
-                row.addView(del, dp);
-                listBox.addView(row);
-            }
-        }
+        renderProtList(listBox);
         body.addView(scroll, new android.widget.LinearLayout.LayoutParams(UI.MP, Theme.dp(act, 260)));
 
         // 底部按钮
@@ -644,6 +618,36 @@ public class SettingsPage extends PageBase {
                 .setView(body)
                 .setPositiveButton("完成", null)
                 .show();
+    }
+
+    /** 渲染保护路径列表到给定容器（删除后实时刷新） */
+    private void renderProtList(final LinearLayout listBox) {
+        listBox.removeAllViews();
+        java.util.List<String> list = act.store.protectedPaths();
+        if (list.isEmpty()) {
+            listBox.addView(UI.note(act, "暂无保护路径"));
+            return;
+        }
+        for (int i = 0; i < list.size(); i++) {
+            final int idx = i;
+            LinearLayout row = UI.row(act);
+            row.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
+            TextView nm = UI.data(act, list.get(i), Theme.T_DATA_S, Theme.MUTED);
+            nm.setSingleLine(true);
+            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            row.addView(nm, new android.widget.LinearLayout.LayoutParams(0, UI.WC, 1f));
+            Button del = UI.danger(act, "×");
+            del.setTextSize(13);
+            LinearLayout.LayoutParams dp = UI.lp(Theme.dp(act, 32), Theme.dp(act, 26));
+            del.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    act.store.removeProtected(idx);
+                    renderProtList(listBox);   // 实时刷新
+                }
+            });
+            row.addView(del, dp);
+            listBox.addView(row);
+        }
     }
 
     // ---------- 远程更新 ----------
