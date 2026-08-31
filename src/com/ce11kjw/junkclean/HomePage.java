@@ -359,7 +359,7 @@ public class HomePage extends PageBase {
         LinearLayout head = UI.row(act);
         // Lucide 图标（回退：无 drawable 时显示文本）
         android.widget.ImageView iconIv = IconView.of(act, c.icon, 18, Theme.TEXT);
-        if (iconIv.getDrawable() != null) {
+        if (iconIv != null) {
             head.addView(iconIv);
         } else {
             TextView icon = UI.text(act, c.icon, 18, Theme.TEXT);

@@ -19,9 +19,10 @@ public class IconView {
         return ctx.getResources().getDrawable(id);
     }
 
-    /** 创建 ImageView，大小与颜色可调 */
+    /** 创建 ImageView，大小与颜色可调。找不到 drawable 返回 null（调用方回退文本） */
     public static ImageView of(Context ctx, String name, int dp, int color) {
         Drawable d = drawable(ctx, name);
+        if (d == null) return null;
         ImageView iv = new ImageView(ctx);
         int px = Theme.dp(ctx, dp);
         android.widget.LinearLayout.LayoutParams lp =
@@ -29,10 +30,8 @@ public class IconView {
         lp.topMargin = Theme.dp(ctx, 2);
         lp.bottomMargin = Theme.dp(ctx, 2);
         iv.setLayoutParams(lp);
-        if (d != null) {
-            d.setTint(color);
-            iv.setImageDrawable(d);
-        }
+        d.setTint(color);
+        iv.setImageDrawable(d);
         return iv;
     }
 

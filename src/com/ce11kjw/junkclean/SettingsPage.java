@@ -579,6 +579,9 @@ public class SettingsPage extends PageBase {
         LinearLayout body = UI.col(act);
         body.setPadding(Theme.dp(act, 8), Theme.dp(act, 4), Theme.dp(act, 8), 0);
 
+        // 列表容器（先声明，供添加/恢复后刷新）
+        final LinearLayout listBox = UI.col(act);
+
         // 添加行
         final EditText input = UI.input(act, "/sdcard/重要目录 或 通配符如 Android/data/*/cache", "");
         body.addView(input, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
@@ -589,6 +592,7 @@ public class SettingsPage extends PageBase {
                 if (path.isEmpty()) { act.toast("请输入目录名或路径"); return; }
                 act.store.addProtected(path);
                 input.setText("");
+                renderProtList(listBox);   // 添加后实时刷新
                 act.toast("已添加保护：" + path);
             }
         });
@@ -597,7 +601,6 @@ public class SettingsPage extends PageBase {
         // 列表（可滚动）
         android.widget.ScrollView scroll = new android.widget.ScrollView(act);
         scroll.setVerticalScrollBarEnabled(false);
-        final LinearLayout listBox = UI.col(act);
         scroll.addView(listBox, new android.widget.LinearLayout.LayoutParams(UI.MP, UI.WC));
         renderProtList(listBox);
         body.addView(scroll, new android.widget.LinearLayout.LayoutParams(UI.MP, Theme.dp(act, 260)));
@@ -607,7 +610,10 @@ public class SettingsPage extends PageBase {
         resetBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 UI.confirm(act, "恢复默认", "将保护路径重置为出厂 66 条？", new Runnable() {
-                    public void run() { act.store.resetProtected(); }
+                    public void run() {
+                        act.store.resetProtected();
+                        renderProtList(listBox);   // 恢复后实时刷新
+                    }
                 });
             }
         });

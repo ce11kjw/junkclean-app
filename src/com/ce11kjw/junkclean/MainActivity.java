@@ -19,7 +19,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
-    public static final String VERSION = "3.0.32";
+    public static final String VERSION = "3.0.33";
 
     private FrameLayout content;
     private static final int TAB_N = 5;
@@ -140,7 +140,7 @@ public class MainActivity extends Activity {
             tab.setPadding(tp, Theme.dp(this, 7), tp, Theme.dp(this, 6));
 
             android.widget.ImageView icon = IconView.of(this, TAB_ICON[i], 15, Theme.DIM);
-            tab.addView(icon);
+            if (icon != null) tab.addView(icon);
 
             TextView label = UI.text(this, TAB_NAME[i], Theme.T_MICRO, Theme.DIM);
             label.setTypeface(Theme.micro());
