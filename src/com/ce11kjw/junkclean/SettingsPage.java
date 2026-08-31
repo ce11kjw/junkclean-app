@@ -15,8 +15,7 @@ import java.util.List;
 public class SettingsPage extends PageBase {
 
     private ScrollView scroll;
-    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel, protInput;
-    private LinearLayout protList;
+    private EditText wlInput, rootInput, bgInput, aiEndpoint, aiKey, aiModel;
     private TextView rootInfo, bgState, aiState, updState, permState, aboutRuntime;
     private LinearLayout aiBody;
 
@@ -532,36 +531,13 @@ public class SettingsPage extends PageBase {
         });
         c.addView(UI.btnRow(act, UI.BTN_H, save, clear), UI.lpm(act, UI.MP, UI.WC, 8));
 
-        // 保护路径管理
+        // 保护路径管理（按钮 + 弹窗，避免页面被 66 条撑长）
         c.addView(UI.divider(act));
-        c.addView(UI.h2(act, "保护路径（目录，扫描跳过 + 删除拦截）"));
-        c.addView(UI.note(act, "支持通配符 *，如 /Android/data/*/cache 匹配所有应用缓存目录。"),
-                UI.lpm(act, UI.MP, UI.WC, Theme.S1));
-        LinearLayout protAdd = UI.row(act);
-        protInput = UI.input(act, "/sdcard/重要目录", "");
-        protAdd.addView(protInput, UI.weight(1f, UI.BTN_H, act));
-        Button addProt = UI.primary(act, "添加");
-        addProt.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) { addProtectedPath(); }
+        Button protBtn = UI.secondary(act, "保护路径（目录，扫描跳过 + 删除拦截）");
+        protBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { showProtectedDialog(); }
         });
-        LinearLayout.LayoutParams app = UI.lp(Theme.dp(act, 56), Theme.dp(act, UI.BTN_H));
-        app.leftMargin = Theme.dp(act, Theme.S2);
-        protAdd.addView(addProt, app);
-        c.addView(protAdd, UI.lpm(act, UI.MP, UI.WC, Theme.S2));
-
-        protList = UI.col(act);
-        c.addView(protList, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
-        renderProtectedPaths();
-
-        Button resetProt = UI.secondary(act, "恢复默认保护路径");
-        resetProt.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                UI.confirm(act, "恢复默认", "将保护路径重置为出厂 66 条？", new Runnable() {
-                    public void run() { act.store.resetProtected(); renderProtectedPaths(); }
-                });
-            }
-        });
-        c.addView(resetProt, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+        c.addView(protBtn, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
 
         // 规则库管理（RuleEngine）
         c.addView(UI.divider(act));
@@ -598,42 +574,76 @@ public class SettingsPage extends PageBase {
         return c;
     }
 
-    private void addProtectedPath() {
-        String path = protInput.getText().toString().trim();
-        if (path.isEmpty()) { act.toast("请输入目录名或路径"); return; }
-        act.store.addProtected(path);
-        protInput.setText("");
-        renderProtectedPaths();
-        act.toast("已添加保护：" + path);
-    }
+    /** 保护路径管理弹窗：查看/添加/删除/恢复默认，避免内嵌列表撑长页面 */
+    private void showProtectedDialog() {
+        LinearLayout body = UI.col(act);
+        body.setPadding(Theme.dp(act, 8), Theme.dp(act, 4), Theme.dp(act, 8), 0);
 
-    private void renderProtectedPaths() {
-        protList.removeAllViews();
-        List<String> list = act.store.protectedPaths();
+        // 添加行
+        final EditText input = UI.input(act, "/sdcard/重要目录 或 通配符如 Android/data/*/cache", "");
+        body.addView(input, UI.lpm(act, UI.MP, UI.WC, Theme.S1));
+        Button addBtn = UI.primary(act, "添加");
+        addBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                String path = input.getText().toString().trim();
+                if (path.isEmpty()) { act.toast("请输入目录名或路径"); return; }
+                act.store.addProtected(path);
+                input.setText("");
+                act.toast("已添加保护：" + path);
+            }
+        });
+        body.addView(addBtn, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        // 列表（可滚动）
+        android.widget.ScrollView scroll = new android.widget.ScrollView(act);
+        scroll.setVerticalScrollBarEnabled(false);
+        final LinearLayout listBox = UI.col(act);
+        scroll.addView(listBox, new android.widget.LinearLayout.LayoutParams(UI.MP, UI.WC));
+
+        // 渲染列表内容
+        java.util.List<String> list = act.store.protectedPaths();
         if (list.isEmpty()) {
-            protList.addView(UI.note(act, "暂无保护路径"));
-            return;
+            listBox.addView(UI.note(act, "暂无保护路径"));
+        } else {
+            for (int i = 0; i < list.size(); i++) {
+                final int idx = i;
+                LinearLayout row = UI.row(act);
+                row.setPadding(0, Theme.dp(act, 4), 0, Theme.dp(act, 4));
+                TextView nm = UI.data(act, list.get(i), Theme.T_DATA_S, Theme.MUTED);
+                nm.setSingleLine(true);
+                nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+                row.addView(nm, new android.widget.LinearLayout.LayoutParams(0, UI.WC, 1f));
+                Button del = UI.danger(act, "×");
+                del.setTextSize(13);
+                LinearLayout.LayoutParams dp = UI.lp(Theme.dp(act, 32), Theme.dp(act, 26));
+                del.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        act.store.removeProtected(idx);
+                        act.toast("已移除保护：" + act.store.protectedPaths().size() + " 条剩余");
+                    }
+                });
+                row.addView(del, dp);
+                listBox.addView(row);
+            }
         }
-        for (int i = 0; i < list.size(); i++) {
-            final int idx = i;
-            LinearLayout row = UI.row(act);
-            row.setPadding(0, Theme.dp(act, 3), 0, Theme.dp(act, 3));
-            TextView nm = UI.data(act, list.get(i), Theme.T_DATA_S, Theme.MUTED);
-            nm.setSingleLine(true);
-            nm.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
-            row.addView(nm, new LinearLayout.LayoutParams(0, UI.WC, 1f));
-            Button del = UI.danger(act, "×");
-            del.setTextSize(13);
-            LinearLayout.LayoutParams dp = UI.lp(Theme.dp(act, 32), Theme.dp(act, 26));
-            del.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    act.store.removeProtected(idx);
-                    renderProtectedPaths();
-                }
-            });
-            row.addView(del, dp);
-            protList.addView(row);
-        }
+        body.addView(scroll, new android.widget.LinearLayout.LayoutParams(UI.MP, Theme.dp(act, 260)));
+
+        // 底部按钮
+        Button resetBtn = UI.secondary(act, "恢复默认（66 条）");
+        resetBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                UI.confirm(act, "恢复默认", "将保护路径重置为出厂 66 条？", new Runnable() {
+                    public void run() { act.store.resetProtected(); }
+                });
+            }
+        });
+        body.addView(resetBtn, UI.lpm(act, UI.MP, Theme.dp(act, UI.BTN_H), Theme.S2));
+
+        new android.app.AlertDialog.Builder(act)
+                .setTitle("保护路径")
+                .setView(body)
+                .setPositiveButton("完成", null)
+                .show();
     }
 
     // ---------- 远程更新 ----------
